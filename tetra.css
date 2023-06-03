@@ -1,0 +1,117 @@
+body
+{
+  font-family: Arial, sans-serif;
+}
+
+h2
+{
+  margin-top: -1em;
+}
+
+h3
+{
+  margin-top: 0.5em;
+}
+
+#main-container
+{
+  display: flex;
+}
+
+#visualization
+{
+  width: 80%;
+  height: 660px;
+  border: 1px solid #ccc;
+  background-color: #000;
+}
+
+#info-panel
+{
+  width: 20%;
+  min-width: 240px;
+  padding: 1rem;
+  margin-right: 1rem;
+  padding-right: 0;
+}
+
+#info-panel table
+{
+  border: 0;
+}
+
+#info-panel table th
+{
+  font-weight: normal;
+  text-align: right;
+}
+
+#info-panel select
+{
+  min-width: 80px;
+}
+
+#time-control
+{
+  margin-top: 1rem;
+  margin-bottom: 0.25em;
+}
+
+#time-control h4
+{
+  padding-left: 90px;
+  margin-bottom: 0.25em;
+}
+
+.instr
+{
+  text-align: right;
+  font-size: 11px;
+  margin-bottom: 0.5em;
+  white-space: nowrap;
+}
+
+.orb
+{
+  white-space: nowrap;
+  border: 0;
+}
+
+.orb th
+{
+  font-weight: normal;
+  text-align: right;
+}
+.orb .val
+{
+  font-family: monospace;
+  font-size: 15px;
+}
+
+.desc
+{
+  font-size: 13px;
+  margin-left: 0.5em;
+  margin-right: 1.5em;
+  position: absolute;
+}
+
+.loadsave
+{
+  float: right;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  text-align: right;
+}
+
+.stepbtn
+{
+  font-size: 8px;
+}
+
+.version
+{
+  font-size: 8px;
+  color: #333;
+}

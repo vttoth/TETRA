@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tetrahedral constellation simulation</title>
+  <link rel="stylesheet" href="tetra.css" type="text/css" />
+  <script src='tetra.js' type="text/javascript"></script>
+</head>
+<body>
+  <h1>Tetrahedral constellation simulation</h1>
+  <div class='loadsave'>
+  <button id="load" onClick="loadAll()">Load</button>
+  <button id="save" onClick="saveAll()">Save</button>
+  <br/><span class='version'>Version 0.9.4</span>
+  </div>
+  <div id="main-container">
+    <div id="visualization">
+      <!-- The 3D visualization will be rendered here -->
+    </div>
+    <div id="info-panel">
+      <h2 >Simulation Controls</h2>
+      <div id="time-control">
+        <h4>Zoom Control</h4>
+        <button id="play-pause" onClick="play()">Play/Pause</button>
+        <input type="range" id="zoom" min="0" max="100" value="0" onChange="zoom()" onInput="zoom()"/>
+		<br/>&nbsp;&nbsp;&nbsp;<button class='stepbtn' id='skipBack' onClick='skipBack()'>&#9664;</button>&nbsp;&nbsp;&nbsp;<button class='stepbtn' id='skipForward' onClick='skipForward()'>&#9654;</button>
+      </div>
+      <table>
+        <tr>
+          <th>Initial state vector:&nbsp;</th>
+          <td><select id="init" onChange="onInit(this.value)">
+          </select></td>
+        </tr>
+        <tr>
+          <td colspan=2><div class='instr'>To reset, reload the page.</div></td>
+        </tr>
+        <tr>
+          <th>Camera location:&nbsp;</th>
+          <td><select id="view" onChange="setView()">
+            <option value="1">X-axis</option>
+            <option value="2">Y-axis</option>
+            <option value="3" selected>Z-axis</option>
+          </select></td>
+        </tr>
+        <tr>
+          <td colspan=2>
+            <div class='instr'>
+              For viewing, the <i>z</i>-axis points from<br/>the constellation towards the Sun;<br/>the <i>x</i>-axis lies in the ecliptic plane.<br/>
+&phi; = <span id='phi'>&nbsp;</span>&deg;, &theta; = <span id='theta'>&nbsp;</span>&deg;
+            </div>
+          </td>
+        </tr>
+      </table>
+      <h3>Orbit characteristics</h3>
+      <table class='orb'>
+        <tr><th>Volume:&nbsp;</td><td><span class='val' id="volume"></span><span class='val'>&nbsp;&times;&nbsp;10<sup>9</sup></span>&nbsp;km<sup>3</sup></td></tr>
+        <tr><th><b>tr M</b>:&nbsp;</td><td><span class='val' id="trM"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
+        <tr><th><b>tr T</b>:&nbsp;</td><td><span class='val' id="trT"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
+        <tr><th>Elapsed time:&nbsp;</td><td><span class='val' id="time"></span>&nbsp;days</td></tr>
+        <tr><th>Eccentricity:&nbsp;</td><td><span class='val' id="e"></span></td></tr>
+        <tr><th>Orb. period:&nbsp;</td><td><span class='val' id="T"></span>&nbsp; days</td></tr>
+      </table>
+      <h3>Description/comments</h3>
+      <div class='desc'>
+            This simulation shows 4 spacecraft in a heliocentric orbit, in a tetrahedral configuration. As they orbit, the tetrahedron will be distorted.<br/>
+            The trace <b>tr M</b> is calculated using the six intersatellite lengths only, with no inertial reference.<br/>
+            The trace <b>tr T</b> is calculated in an inertial reference frame; as expected, it is zero within the limits of double-precision rounding.
+      </div>
+    </div>
+  </div>
+</body>
+</html>
