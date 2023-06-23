@@ -34,7 +34,37 @@ const spacecraftsets = [
       { x: 0.6*AU-0.5, y:  0.5, z:  0.5, vx: 1e-7, vy:0.0485+1.7e-7, vz:-4e-7, r:128, g:128, b:255 },
       { x: 0.6*AU+0.5, y:  0.5, z: -0.5, vx:-1e-7, vy:0.0485-1.7e-7, vz: 3e-7, r:255, g:255, b:0 }
     ]
-  }
+  },
+  {
+    name: "High ecc. (tiny)",
+    tail: 600,
+    states: [
+      { x: 0.6*AU-0.5e-1, y: -0.5e-1, z: -0.5e-1, vx: 1e-8, vy:0.0485+1.7e-8, vz: 5e-8, r:255, g:128, b:128 },
+      { x: 0.6*AU+0.5e-1, y: -0.5e-1, z:  0.5e-1, vx: 1e-8, vy:0.0485-1.7e-8, vz:-8e-8, r:128, g:255, b:128 },
+      { x: 0.6*AU-0.5e-1, y:  0.5e-1, z:  0.5e-1, vx: 1e-8, vy:0.0485+1.7e-8, vz:-4e-8, r:128, g:128, b:255 },
+      { x: 0.6*AU+0.5e-1, y:  0.5e-1, z: -0.5e-1, vx:-1e-8, vy:0.0485-1.7e-8, vz: 3e-8, r:255, g:255, b:0 }
+    ]
+  },
+  {
+    name: "High ecc. (large)",
+    tail: 600,
+    states: [
+      { x: 0.6*AU-0.5e1, y: -0.5e1, z: -0.5e1, vx: 1e-7, vy:0.0485+1.7e-7, vz: 5e-7, r:255, g:128, b:128 },
+      { x: 0.6*AU+0.5e1, y: -0.5e1, z:  0.5e1, vx: 1e-7, vy:0.0485-1.7e-7, vz:-8e-7, r:128, g:255, b:128 },
+      { x: 0.6*AU-0.5e1, y:  0.5e1, z:  0.5e1, vx: 1e-7, vy:0.0485+1.7e-7, vz:-4e-7, r:128, g:128, b:255 },
+      { x: 0.6*AU+0.5e1, y:  0.5e1, z: -0.5e1, vx:-1e-7, vy:0.0485-1.7e-7, vz: 3e-7, r:255, g:255, b:0 }
+    ]
+  },
+  {
+    name: "test",
+    tail: 300,
+    states: [
+      { x: AU, y: 0, z: 0, vx:0, vy:30e-3, vz:0, r:255, g:128, b:128 },
+      { x: AU+2, y: 0, z: 0, vx:0, vy:30e-3, vz:4e-7, r:128, g:255, b:128 },
+      { x: AU, y: 2, z: 0, vx:0, vy:30e-3, vz:0, r:128, g:128, b:255 },
+      { x: AU, y: 0, z: 2, vx:0, vy:30e-3, vz:0, r:255, g:255, b:0 }
+    ]
+  },
 ];
 
 class State
@@ -147,11 +177,33 @@ var spacecrafts;
 var states;
 var indices;
 
-function a(s)
+function ag(s)
 {
-	var r = Math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z);
+	var r = norm(s); // Math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z);
 	var r3 = r * r * r;
 	return new State(0, 0, 0, -GM * s.x / r3, -GM * s.y / r3, -GM * s.z / r3);
+}
+
+var w = 0; // Can test with 1e-9; tr W ~= tr T, both nonzero.
+           // Also accepted as  GET parameter
+
+function a(s)
+{
+  let a0 = ag(s);
+
+  let ex = states.reduce((a,b)=>({x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}));
+  let nx = norm(ex);
+  ex.x /= nx;
+  ex.y /= nx;
+  ex.z /= nx;
+
+  let r = norm(s);
+
+  a0.vx += w/r * (ex.y*s.z - ex.z*s.y);
+  a0.vy += w/r * (ex.z*s.x - ex.x*s.z);
+  a0.vz += w/r * (ex.x*s.y - ex.y*s.x);
+
+  return a0;
 }
 
 function rk4(s, dt)
@@ -163,11 +215,14 @@ function rk4(s, dt)
   return s.add(k1.add(k2.multiply(2)).add(k3.multiply(2)).add(k4).multiply(dt / 6));
 }
 
+var sunZ;
+
 function transformCoordinates(stateVectors)
 {
   // Step 1: Find the geometric center
   let centerX = 0, centerY = 0, centerZ = 0;
-  for (let i = 0; i < stateVectors.length; i++) {
+  for (let i = 0; i < stateVectors.length; i++)
+  {
     centerX += stateVectors[i].x;
     centerY += stateVectors[i].y;
     centerZ += stateVectors[i].z;
@@ -209,6 +264,26 @@ function transformCoordinates(stateVectors)
 			vx: stateVectors[i].vx, vy: stateVectors[i].vy, vz: stateVectors[i].vz,
 			r: stateVectors[i].r, g: stateVectors[i].g, b: stateVectors[i].b});
   }
+
+  // Sanity check: Calculate the position of the Sun!
+  // Should always be {x:0, y:0, z:-O(AU)}.
+  {
+    let dx = 0 - newOrigin.x;
+    let dy = 0 - newOrigin.y;
+    let dz = 0 - newOrigin.z;
+    let xPrime = dx * xPrimeAxis.x + dy * xPrimeAxis.y + dz * xPrimeAxis.z;
+    let yPrime = dx * (zPrimeAxis.y * xPrimeAxis.z - zPrimeAxis.z * xPrimeAxis.y)
+			   + dy * (zPrimeAxis.z * xPrimeAxis.x - zPrimeAxis.x * xPrimeAxis.z)
+			   + dz * (zPrimeAxis.x * xPrimeAxis.y - zPrimeAxis.y * xPrimeAxis.x);
+    let zPrime = dx * zPrimeAxis.x + dy * zPrimeAxis.y + dz * zPrimeAxis.z;
+    if (Math.abs(xPrime) > 1 || Math.abs(yPrime) > 1)
+    {
+      console.log("The SUN is not where it is supposed to be!");
+      console.log({x:xPrime, y:yPrime, z: zPrime});
+    }
+    sunZ = zPrime;
+  }
+
   return transformedCoordinates;
 }
 
@@ -227,16 +302,98 @@ function volume(spacecrafts)
 	return 1/6*determinant(spacecrafts[0], spacecrafts[1], spacecrafts[2], spacecrafts[3]);
 }
 
-function L(r1,r2)
-{
-  return Math.sqrt((r1.x-r2.x)**2+(r1.y-r2.y)**2+(r1.z-r2.z)**2);
-}
-
 function area(s1, s2, s3)
 {
     var d = ((s2.z-s3.z)**2+(s2.y-s3.y)**2+(s2.x-s3.x)**2)*((s1.x-s3.x)**2+(s1.z-s3.z)**2+(s1.y-s3.y)**2);
     d -= ((s2.x-s3.x)*(s1.x-s3.x)+(s1.z-s3.z)*(s2.z-s3.z)+(s1.y-s3.y)*(s2.y-s3.y))**2;
     return Math.sqrt(d);
+}
+
+function L(r1,r2)
+{
+  return Math.sqrt((r1.x-r2.x)**2+(r1.y-r2.y)**2+(r1.z-r2.z)**2);
+}
+
+function X(u,v)
+{
+   return {x:u.y*v.z-u.z*v.y, y:u.z*v.x-u.x*v.z, z:u.x*v.y-u.y*v.x};
+}
+
+function dot(u,v)
+{
+  return u.x*v.x+u.y*v.y+u.z*v.z;
+}
+
+function norm(R)
+{
+	return Math.sqrt(R.x*R.x + R.y*R.y + R.z*R.z);
+}
+
+function smul(s, v)
+{
+  return {x:s*v.x, y:s*v.y, z:s*v.z};
+}
+
+function Mmul(M, v)
+{
+  return {x:M[0][0] * v.x + M[0][1] * v.y + M[0][2] * v.z,
+          y:M[1][0] * v.x + M[1][1] * v.y + M[1][2] * v.z,
+          z:M[2][0] * v.x + M[2][1] * v.y + M[2][2] * v.z};
+}
+
+function MP(M, K)
+{
+  let R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+  {
+    R[i][j] = M[i][j] + K[i][j];
+  }
+  return R;
+}
+
+function MM(M, K)
+{
+  let R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+      for (let k = 0; k < 3; k++)
+  {
+    R[i][j] += M[i][k]*K[k][j];
+  }
+  return R;
+}
+
+function sM(s, M)
+{
+  let R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+  {
+    R[i][j] = s * M[i][j];
+  }
+  return R;
+}
+
+function vadd(u, v)
+{
+  return {x:u.x+v.x, y:u.y+v.y, z:u.z+v.z};
+}
+
+function inv3x3M(M)
+{
+  const a = M[0][0], b = M[0][1], c = M[0][2];
+  const d = M[1][0], e = M[1][1], f = M[1][2];
+  const g = M[2][0], h = M[2][1], i = M[2][2];
+
+  const D = a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
+
+  return [[(e*i - f*h) / D, (c*h - b*i) / D, (b*f - c*e) / D],
+          [(f*g - d*i) / D, (a*i - c*g) / D, (c*d - a*f) / D],
+          [(d*h - e*g) / D, (b*g - a*h) / D, (a*e - b*d) / D]];
 }
 
 class TS
@@ -255,16 +412,8 @@ class TS
 
 rtsM = new TS(3);
 rtsT = new TS(3);
-
-function X(u,v)
-{
-   return {x:u.y*v.z-u.z*v.y, y:u.z*v.x-u.x*v.z, z:u.x*v.y-u.y*v.x};
-}
-
-function dot(u,v)
-{
-  return u.x*v.x+u.y*v.y+u.z*v.z;
-}
+rtsE = new TS(3);
+rtsW = new TS(3);
 
 function trT(states, DT)
 {
@@ -295,6 +444,173 @@ function trM(states, DT)
   return doTR(rtsM, DT);
 }
 
+function trE(states, DT)
+{
+  // What we want is the same calculation with respect to the "satellite" frame.
+
+  let r12 = {x:states[1].x - states[0].x, y:states[1].y - states[0].y, z: states[1].z - states[0].z};
+  let r13 = {x:states[2].x - states[0].x, y:states[2].y - states[0].y, z: states[2].z - states[0].z};
+  let r14 = {x:states[3].x - states[0].x, y:states[3].y - states[0].y, z: states[3].z - states[0].z};
+
+  let ex = states.reduce((a,b)=>({x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}));
+  let nx = norm(ex);
+  ex.x /= nx;
+  ex.y /= nx;
+  ex.z /= nx;
+
+  let ev = states.reduce((a,b)=>({vx:a.vx+b.vx,vy:a.vy+b.vy,vz:a.vz+b.vz}));
+
+  let ez = {x:ex.y*ev.vz - ex.z*ev.vy, y:ex.z*ev.vx - ex.x*ev.vz, z:ex.x*ev.vy - ex.y*ev.vx};
+  let nz = norm(ez);
+  ez.x /= nz;
+  ez.y /= nz;
+  ez.z /= nz;
+
+  let ey = {x:ez.y*ex.z-ez.z*ex.y, y:ez.z*ex.x -ez.x*ex.z, z:ez.x*ex.y - ez.y*ex.x};
+
+  let R12 = {x:dot(r12,ex), y:dot(r12,ey), z:dot(r12,ez)};
+  let R13 = {x:dot(r13,ex), y:dot(r13,ey), z:dot(r13,ez)};
+  let R14 = {x:dot(r14,ex), y:dot(r14,ey), z:dot(r14,ez)};
+
+  rtsE.push({r12:R12, r13:R13, r14:R14});
+
+  return doTR(rtsE, DT);
+}
+
+function Sagnac(ri, rj, vi, vj)
+{
+  const c = 299.792458; // Mm/s
+
+  let t1i = (dot(vi,ri) + Math.sqrt(dot(vi,ri)**2 + (c**2-dot(vi,vi))*dot(ri,ri))) / (c**2 - dot(vi,vi));
+  let rij = vadd(rj, smul(-1, ri));
+  let vij = vadd(vj, smul(-1, vi));
+  let bij = dot(vadd(rij, smul(t1i, vij)), vj)
+  let tij = (bij + Math.sqrt(bij**2 + (c**2 - dot(vj,vj))*dot(vadd(rij, smul(t1i, vij)),vadd(rij, smul(t1i, vij))))) / (c**2 - dot(vj,vj));
+  let tj1 = Math.sqrt(dot(vadd(rj, smul((t1i+tij), vj)), vadd(rj, smul((t1i+tij), vj)))) / c;
+
+  return t1i + tij + tj1;
+}
+
+function trW(DT)
+{
+  if (rtsT.data.length != 3) return NaN;
+
+  // Midpoint position
+  let r12 = rtsT.data[1].r12;
+  let r13 = rtsT.data[1].r13;
+  let r14 = rtsT.data[1].r14;
+
+  // Velocities of 234 wrt. satellite 1
+  let v12 = smul(1/(2*DT), vadd(rtsT.data[2].r12, smul(-1, rtsT.data[0].r12)));
+  let v13 = smul(1/(2*DT), vadd(rtsT.data[2].r13, smul(-1, rtsT.data[0].r13)));
+  let v14 = smul(1/(2*DT), vadd(rtsT.data[2].r14, smul(-1, rtsT.data[0].r14)));
+
+  let w123 = Sagnac(r12, r13, v12, v13) - Sagnac(r13, r12, v13, v12);
+  let w134 = Sagnac(r13, r14, v13, v14) - Sagnac(r14, r13, v14, v13);
+  let w142 = Sagnac(r14, r12, v14, v12) - Sagnac(r12, r14, v12, v14);
+
+//console.log("w134: " + w134 + ", w142: " + w142 + ", w123: " + w123);
+
+  //
+  //
+  // From this point on, all we are allowed to use are w1..w3 and rtsM
+  //
+  //
+
+  r12 = rtsM.data[1].r12;
+  r13 = rtsM.data[1].r13;
+  r14 = rtsM.data[1].r14;
+
+  // Velocities of 234 wrt. satellite 1
+  v12 = smul(1/(2*DT), vadd(rtsM.data[2].r12, smul(-1, rtsM.data[0].r12)));
+  v13 = smul(1/(2*DT), vadd(rtsM.data[2].r13, smul(-1, rtsM.data[0].r13)));
+  v14 = smul(1/(2*DT), vadd(rtsM.data[2].r14, smul(-1, rtsM.data[0].r14)));
+
+  let w = {x:0, y:0, z:0};
+  let eps = 1e-10;
+  let dx = {x:eps, y:0, z:0};
+  let dy = {x:0, y:eps, z:0};
+  let dz = {x:0, y:0, z:eps};
+
+  function m1234(w, r12, r13, r14, v12, v13, v14)
+  {
+    let w12 = vadd(v12, X(r12, w));
+    let w13 = vadd(v13, X(r13, w));
+    let w14 = vadd(v14, X(r14, w));
+
+    let m =
+    {
+      m123: Sagnac(r12, r13, w12, w13) - Sagnac(r13, r12, w13, w12),
+      m134: Sagnac(r13, r14, w13, w14) - Sagnac(r14, r13, w14, w13),
+      m142: Sagnac(r14, r12, w14, w12) - Sagnac(r12, r14, w12, w14)
+    };
+    return m;
+  };
+
+  let count = 50;
+  let m;
+  let D = {x:0, y:0, z:0};
+  let F = {x:0, y:0, z:0};
+  do
+  {
+    w = vadd(w, D);
+
+    m = m1234(w, r12, r13, r14, v12, v13, v14);
+
+    let mx = m1234(vadd(w, dx), r12, r13, r14, v12, v13, v14);
+    let my = m1234(vadd(w, dy), r12, r13, r14, v12, v13, v14);
+    let mz = m1234(vadd(w, dz), r12, r13, r14, v12, v13, v14);
+
+    let J = [[(mx.m123-m.m123)/eps, (my.m123-m.m123)/eps, (mz.m123-m.m123)/eps],
+             [(mx.m134-m.m134)/eps, (my.m134-m.m134)/eps, (mz.m134-m.m134)/eps],
+             [(mx.m142-m.m142)/eps, (my.m142-m.m142)/eps, (mz.m142-m.m142)/eps]];
+
+    F = {x:w123 - m.m123, y:w134 - m.m134, z:w142 - m.m142};
+    D = Mmul(inv3x3M(J), F);
+  
+  } while (--count > 0 && Math.sqrt(dot(F,F)) > 1e-17);
+
+//console.log("COUNT = " + count);
+//console.log(D);
+//console.log("m134: " + m.m134 + ", m142: " + m.m142 + ", m123: " + m.m123);
+console.log(w);
+
+  // We can now calculate the velocities of the 234 vertices wrt. 1
+//  let u12 = X(w, smul(0.5, vadd(rtsM.data[0].r12, rtsM.data[1].r12)));
+//  let u13 = X(w, smul(0.5, vadd(rtsM.data[0].r13, rtsM.data[1].r13)));
+//  let u14 = X(w, smul(0.5, vadd(rtsM.data[0].r14, rtsM.data[1].r14)));
+//console.log(u12);
+//console.log(u13);
+//console.log(u14);
+
+  let W = Math.sqrt(dot(w,w));
+  let theta = W*DT;
+  let I = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  let K = [[0, -w.z/W, w.y/W], [w.z/W, 0, -w.x/W], [-w.y/W, w.x/W, 0]];
+  let R = MP(I, MP(sM(Math.sin(theta), K), sM(1-Math.cos(theta), MM(K,K))));
+
+  // and adjust their relative positions, removing the fictitious force
+  r12 = Mmul(R, rtsM.data[0].r12);
+  r13 = Mmul(R, rtsM.data[0].r13);
+  r14 = Mmul(R, rtsM.data[0].r14);
+
+  rtsW.push({r12:r12, r13:r13, r14:r14});
+
+  // The middle position is left alone
+  rtsW.push(rtsM.data[1]);
+
+  theta = -W*DT;
+  R = MP(I, MP(sM(Math.sin(theta), K), sM(1-Math.cos(theta), MM(K,K))));
+
+  r12 = Mmul(R, rtsM.data[2].r12);
+  r13 = Mmul(R, rtsM.data[2].r13);
+  r14 = Mmul(R, rtsM.data[2].r14);
+
+  rtsW.push({r12:r12, r13:r13, r14:r14});
+
+  return doTR(rtsW, DT);
+}
+
 function doTR(rts, DT)
 {
   if (rts.data.length == 3)
@@ -312,11 +628,20 @@ function doTR(rts, DT)
     let r13=rts.data[1].r13;
     let r14=rts.data[1].r14;
 
+/*  // Alternative method: explicitly calculating the trace
+    let A = [[a12.x, a13.x, a14.x], [a12.y, a13.y, a14.y], [a12.z, a13.z, a14.z]];
+    let R = [[r12.x, r13.x, r14.x], [r12.y, r13.y, r14.y], [r12.z, r13.z, r14.z]];
+    let T = MM(A, inv3x3M(R));
+    console.log(T);
+    let tr = T[0][0] + T[1][1] + T[2][2];
+*/
+
     let V2 = dot(r12,X(r13,r14));
     let V3 = dot(r13,X(r14,r12));
     let V4 = dot(r14,X(r12,r13));
 
     let tr = dot(a12,X(r13,r14))/V2 + dot(a13,X(r14,r12))/V3 + dot(a14,X(r12,r13))/V4;
+
     return tr;
   }
   return NaN;
@@ -405,10 +730,12 @@ function propagate(dontMove = false, forward = true)
 	if (inPROP) return;
 	inPROP = true;
 
-	const DT = forward ? 3600 : -3600;
-	const NT = 24;
+	const DT = forward ? 1800 : -1800;
+	const NT = 48;
 	var traceM = 0;
 	var traceT = 0;
+	var traceE = 0;
+	var traceW = 0;
 
 	if (!dontMove)
 	{
@@ -420,6 +747,8 @@ function propagate(dontMove = false, forward = true)
 		}
 		traceM = trM(states, DT);
 		traceT = trT(states, DT);
+		traceE = trE(states, DT);
+        traceW = trW(DT);
 		time += DT / 86400.0;
 	}
 	}
@@ -428,12 +757,18 @@ function propagate(dontMove = false, forward = true)
 	if (theVolume[0] != '-') theVolume = "&nbsp;" + theVolume;
 	traceM = traceM.toPrecision(5);
 	traceT = traceT.toPrecision(5);
+	traceE = traceE.toPrecision(5);
+	traceW = traceW.toPrecision(5);
 	if (traceM[0] != '-') traceM = "&nbsp;" + traceM;
-	if (traceT[0] != '-') traceT = "&nbsp;" + traceT
+	if (traceT[0] != '-') traceT = "&nbsp;" + traceT;
+	if (traceE[0] != '-') traceE = "&nbsp;" + traceE;
+	if (traceW[0] != '-') traceW = "&nbsp;" + traceW;
 
 	document.getElementById("volume").innerHTML = theVolume;
 	document.getElementById("trM").innerHTML = traceM;
 	document.getElementById("trT").innerHTML = traceT;
+	document.getElementById("trE").innerHTML = traceE;
+	document.getElementById("trW").innerHTML = traceW;
 	document.getElementById("time").innerText = time.toFixed(2);
 
     //window.requestAnimationFrame(render);
@@ -509,6 +844,16 @@ function render()
 
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (view == 3)
+    {
+	  // Draw sun
+	  ctx.fillStyle = 'yellow';
+	  ctx.beginPath();
+      let cw = Math.min(canvas.width, canvas.height);
+	  ctx.arc(canvas.width/2 + camera.phi*4/Math.PI*cw/2, canvas.height/2 + camera.theta*4/Math.PI*cw/2, -5*AU/sunZ, 0, 2 * Math.PI);
+	  ctx.fill();
+    }
 
 	// Sort the indices array based on the 'z' property of the corresponding objects in the original array
 
@@ -686,6 +1031,7 @@ window.addEventListener('DOMContentLoaded', () =>
 	const params = new URLSearchParams(window.location.search);
 	if (params.get('view')) view = params.get('view');
 	if (params.get('init')) init = params.get('init');
+	if (params.get('w')) w = params.get('w');
 
 	const select = document.getElementById("init");
 	for (let i = 0; i < spacecraftsets.length; i++)
