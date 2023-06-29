@@ -55,10 +55,10 @@
       <h3>Orbit characteristics</h3>
       <table class='orb'>
         <tr><th>Volume:&nbsp;</td><td><span class='val' id="volume"></span><span class='val'>&nbsp;&times;&nbsp;10<sup>9</sup></span>&nbsp;km<sup>3</sup></td></tr>
-        <tr><th><b>tr M</b>:&nbsp;</td><td><span class='val' id="trM"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
         <tr><th><b>tr T</b>:&nbsp;</td><td><span class='val' id="trT"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
-        <tr><th><b>tr E</b>:&nbsp;</td><td><span class='val' id="trE"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
         <tr><th><b>tr W</b>:&nbsp;</td><td><span class='val' id="trW"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
+        <tr class='hidden'><th><b>tr E</b>:&nbsp;</td><td><span class='val' id="trE"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
+        <tr class='hidden'><th><b>tr M</b>:&nbsp;</td><td><span class='val' id="trM"></span>&nbsp;s<sup>&minus;2</sup></td></tr>
         <tr><th>Elapsed time:&nbsp;</td><td><span class='val' id="time"></span>&nbsp;days</td></tr>
         <tr><th>Eccentricity:&nbsp;</td><td><span class='val' id="e"></span></td></tr>
         <tr><th>Orb. period:&nbsp;</td><td><span class='val' id="T"></span>&nbsp; days</td></tr>
@@ -66,8 +66,8 @@
       <h3>Description/comments</h3>
       <div class='desc'>
             This simulation shows 4 spacecraft in a heliocentric orbit, in a tetrahedral configuration. As they orbit, the tetrahedron will be distorted.<br/>
-            The trace <b>tr M</b> is calculated using the six intersatellite lengths only, with no inertial reference.<br/>
-            The trace <b>tr T</b> is calculated in an inertial reference frame; as expected, it is zero within the limits of double-precision rounding.
+            The trace <b>tr T</b> is calculated in an inertial reference frame; as expected, it is zero within the limits of double-precision rounding for Newtonian gravity.<br/>
+            The trace <b>tr W</b> is calculated using the six intersatellite ranges and three Sagnac-type observables only, with no external reference.<br/>
       </div>
     </div>
   </div>

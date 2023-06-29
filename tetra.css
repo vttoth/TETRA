@@ -10,7 +10,8 @@ h2
 
 h3
 {
-  margin-top: 0.5em;
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
 }
 
 #main-container
@@ -61,6 +62,11 @@ h3
 {
   padding-left: 90px;
   margin-bottom: 0.25em;
+}
+
+.hidden
+{
+  display: none;
 }
 
 .instr

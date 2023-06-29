@@ -177,15 +177,19 @@ var spacecrafts;
 var states;
 var indices;
 
+// Force modifiers:
+// w - induced rotation, can test with 1e-9
+// m - Yukawa mass (inverse range) in 1/AU
+// y - Yukawa coupling constant
+var MOD = { w: 0, m: 0, y: 0 };
+
 function ag(s)
 {
 	var r = norm(s); // Math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z);
 	var r3 = r * r * r;
-	return new State(0, 0, 0, -GM * s.x / r3, -GM * s.y / r3, -GM * s.z / r3);
+	var GMY = GM * (1 + MOD.y * (1 - (1 + r*MOD.m/AU)*Math.exp(-r*MOD.m/AU)));
+	return new State(0, 0, 0, -GMY * s.x / r3, -GMY * s.y / r3, -GMY * s.z / r3);
 }
-
-var w = 0; // Can test with 1e-9; tr W ~= tr T, both nonzero.
-           // Also accepted as  GET parameter
 
 function a(s)
 {
@@ -199,9 +203,9 @@ function a(s)
 
   let r = norm(s);
 
-  a0.vx += w/r * (ex.y*s.z - ex.z*s.y);
-  a0.vy += w/r * (ex.z*s.x - ex.x*s.z);
-  a0.vz += w/r * (ex.x*s.y - ex.y*s.x);
+  a0.vx += MOD.w/r * (ex.y*s.z - ex.z*s.y);
+  a0.vy += MOD.w/r * (ex.z*s.x - ex.x*s.z);
+  a0.vz += MOD.w/r * (ex.x*s.y - ex.y*s.x);
 
   return a0;
 }
@@ -573,7 +577,7 @@ function trW(DT)
 //console.log("COUNT = " + count);
 //console.log(D);
 //console.log("m134: " + m.m134 + ", m142: " + m.m142 + ", m123: " + m.m123);
-console.log(w);
+//console.log(w);
 
   // We can now calculate the velocities of the 234 vertices wrt. 1
 //  let u12 = X(w, smul(0.5, vadd(rtsM.data[0].r12, rtsM.data[1].r12)));
@@ -1031,7 +1035,9 @@ window.addEventListener('DOMContentLoaded', () =>
 	const params = new URLSearchParams(window.location.search);
 	if (params.get('view')) view = params.get('view');
 	if (params.get('init')) init = params.get('init');
-	if (params.get('w')) w = params.get('w');
+	if (params.get('w')) MOD.w = params.get('w');
+	if (params.get('m')) MOD.m = params.get('m');
+	if (params.get('y')) MOD.y = params.get('y');
 
 	const select = document.getElementById("init");
 	for (let i = 0; i < spacecraftsets.length; i++)
