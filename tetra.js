@@ -4,65 +4,84 @@ const AU =  1.495978707e5;	// Mm
 var view = 3;
 var init = 0;
 
+const nullstate = { x: 0, y: 0, z: 0};
+
 const spacecraftsets = [
   {
     name: "Circular",
     tail: 300,
+    refstate: { x: AU, y: 0, z: 0, vx: 0, vy: 30e-3, vz: 0},
     states: [
-      { x: AU-1, y: -1, z: -3, vx:1e-8, vy:30e-3, vz:2e-7, r:255, g:128, b:128 },
-      { x: AU+1, y: -1, z: 2, vx:0, vy:30e-3-4e-7, vz:0, r:128, g:255, b:128 },
-      { x: AU-1, y: 1, z: 5, vx:0, vy:30e-3, vz:2e-7, r:128, g:128, b:255 },
-      { x: AU+1, y: 2, z: 2, vx:0, vy:30e-3-4e-7, vz:0, r:255, g:255, b:0 }
+      { x: -1, y: -1, z: -3, vx:1e-8, vy:30e-3, vz:2e-7, r:255, g:128, b:128 },
+      { x: +1, y: -1, z: 2, vx:0, vy:30e-3-4e-7, vz:0, r:128, g:255, b:128 },
+      { x: -1, y: 1, z: 5, vx:0, vy:30e-3, vz:2e-7, r:128, g:128, b:255 },
+      { x: +1, y: 2, z: 2, vx:0, vy:30e-3-4e-7, vz:0, r:255, g:255, b:0 }
     ]
   },
   {
     name: "Eccentric",
     tail: 600,
+    refstate: { x: AU, y: 0, z: 0, vx: 0, vy: 35e-3, vz: 0},
     states: [
-      { x: AU-1, y: -1, z: -1, vx:0e-7, vy:35e-3-15e-8, vz:1e-7, r:255, g:128, b:128 },
-      { x: AU+1, y: -1, z: 1, vx:0e-7, vy:35e-3-50e-8, vz:0, r:128, g:255, b:128 },
-      { x: AU-1, y: 1, z: -2, vx:0e-7, vy:35e-3-15e-8, vz:1e-7, r:128, g:128, b:255 },
-      { x: AU+1, y: 1, z: 3, vx:0e-7, vy:35e-3-50e-8, vz:0e-7, r:255, g:255, b:0 }
+      { x: -1, y: -1, z: -1, vx:0e-7, vy:35e-3-15e-8, vz:1e-7, r:255, g:128, b:128 },
+      { x: +1, y: -1, z: 1, vx:0e-7, vy:35e-3-50e-8, vz:0, r:128, g:255, b:128 },
+      { x: -1, y: 1, z: -2, vx:0e-7, vy:35e-3-15e-8, vz:1e-7, r:128, g:128, b:255 },
+      { x: +1, y: 1, z: 3, vx:0e-7, vy:35e-3-50e-8, vz:0e-7, r:255, g:255, b:0 }
     ]
   },
   {
     name: "High ecc.",
     tail: 600,
+    refstate: { x: 0.6 * AU, y: 0, z: 0, vx: 0, vy: 0.0485, vz: 0 },
     states: [
-      { x: 0.6*AU-0.5, y: -0.5, z: -0.5, vx: 1e-7, vy:0.0485+1.7e-7, vz: 5e-7, r:255, g:128, b:128 },
-      { x: 0.6*AU+0.5, y: -0.5, z:  0.5, vx: 1e-7, vy:0.0485-1.7e-7, vz:-8e-7, r:128, g:255, b:128 },
-      { x: 0.6*AU-0.5, y:  0.5, z:  0.5, vx: 1e-7, vy:0.0485+1.7e-7, vz:-4e-7, r:128, g:128, b:255 },
-      { x: 0.6*AU+0.5, y:  0.5, z: -0.5, vx:-1e-7, vy:0.0485-1.7e-7, vz: 3e-7, r:255, g:255, b:0 }
+      { x: -0.5, y: -0.5, z: -0.5, vx: 1e-7, vy:0.0485+1.7e-7, vz: 5e-7, r:255, g:128, b:128 },
+      { x: +0.5, y: -0.5, z:  0.5, vx: 1e-7, vy:0.0485-1.7e-7, vz:-8e-7, r:128, g:255, b:128 },
+      { x: -0.5, y:  0.5, z:  0.5, vx: 1e-7, vy:0.0485+1.7e-7, vz:-4e-7, r:128, g:128, b:255 },
+      { x: +0.5, y:  0.5, z: -0.5, vx:-1e-7, vy:0.0485-1.7e-7, vz: 3e-7, r:255, g:255, b:0 }
     ]
   },
   {
     name: "High ecc. (tiny)",
     tail: 600,
+    refstate: { x: 0.6 * AU, y: 0, z: 0, vx: 0, vy: 0.0485, vz: 0 },
     states: [
-      { x: 0.6*AU-0.5e-1, y: -0.5e-1, z: -0.5e-1, vx: 1e-8, vy:0.0485+1.7e-8, vz: 5e-8, r:255, g:128, b:128 },
-      { x: 0.6*AU+0.5e-1, y: -0.5e-1, z:  0.5e-1, vx: 1e-8, vy:0.0485-1.7e-8, vz:-8e-8, r:128, g:255, b:128 },
-      { x: 0.6*AU-0.5e-1, y:  0.5e-1, z:  0.5e-1, vx: 1e-8, vy:0.0485+1.7e-8, vz:-4e-8, r:128, g:128, b:255 },
-      { x: 0.6*AU+0.5e-1, y:  0.5e-1, z: -0.5e-1, vx:-1e-8, vy:0.0485-1.7e-8, vz: 3e-8, r:255, g:255, b:0 }
+      { x: -0.5e-1, y: -0.5e-1, z: -0.5e-1, vx: 1e-8, vy:0.0485+1.7e-8, vz: 5e-8, r:255, g:128, b:128 },
+      { x: +0.5e-1, y: -0.5e-1, z:  0.5e-1, vx: 1e-8, vy:0.0485-1.7e-8, vz:-8e-8, r:128, g:255, b:128 },
+      { x: -0.5e-1, y:  0.5e-1, z:  0.5e-1, vx: 1e-8, vy:0.0485+1.7e-8, vz:-4e-8, r:128, g:128, b:255 },
+      { x: +0.5e-1, y:  0.5e-1, z: -0.5e-1, vx:-1e-8, vy:0.0485-1.7e-8, vz: 3e-8, r:255, g:255, b:0 }
     ]
   },
   {
     name: "High ecc. (large)",
     tail: 600,
+    refstate: { x: 0.6 * AU, y: 0, z: 0, vx: 0, vy: 0.0485, vz: 0 },
     states: [
-      { x: 0.6*AU-0.5e1, y: -0.5e1, z: -0.5e1, vx: 1e-7, vy:0.0485+1.7e-7, vz: 5e-7, r:255, g:128, b:128 },
-      { x: 0.6*AU+0.5e1, y: -0.5e1, z:  0.5e1, vx: 1e-7, vy:0.0485-1.7e-7, vz:-8e-7, r:128, g:255, b:128 },
-      { x: 0.6*AU-0.5e1, y:  0.5e1, z:  0.5e1, vx: 1e-7, vy:0.0485+1.7e-7, vz:-4e-7, r:128, g:128, b:255 },
-      { x: 0.6*AU+0.5e1, y:  0.5e1, z: -0.5e1, vx:-1e-7, vy:0.0485-1.7e-7, vz: 3e-7, r:255, g:255, b:0 }
+      { x: -0.5e1, y: -0.5e1, z: -0.5e1, vx: 2e-6, vy:0.0485+1.8e-6, vz: -2.2e-6, r:255, g:128, b:128 },
+      { x: +0.5e1, y: -0.5e1, z:  0.5e1, vx: 1e-6, vy:0.0485-0.7e-6, vz:  2.2e-6, r:128, g:255, b:128 },
+      { x: -0.5e1, y:  0.5e1, z:  0.5e1, vx:-1e-6, vy:0.0485+0.7e-6, vz:  2.2e-6, r:128, g:128, b:255 },
+      { x: +0.5e1, y:  0.5e1, z: -0.5e1, vx:-2e-6, vy:0.0485-1.8e-6, vz: -2.2e-6, r:255, g:255, b:0 }
+    ]
+  },
+  {
+    name: "Big Circular",
+    tail: 600,
+    refstate: { x: 2*AU, y: 0, z: 0, vx: 0, vy: 21e-3, vz: 0},
+    states: [
+      { x: -1, y: -1, z: -3, vx:1e-8, vy:21e-3, vz:1e-7, r:255, g:128, b:128 },
+      { x: +1, y: -1, z: 2, vx:0, vy:21e-3-2e-7, vz:0, r:128, g:255, b:128 },
+      { x: -1, y: 1, z: 5, vx:0, vy:21e-3, vz:1e-7, r:128, g:128, b:255 },
+      { x: +1, y: 2, z: 2, vx:0, vy:21e-3-2e-7, vz:0, r:255, g:255, b:0 }
     ]
   },
   {
     name: "test",
     tail: 300,
+    refstate: { x: AU, y: 0, z: 0, vx: 0, vy: 30e-3, vz: 0},
     states: [
-      { x: AU, y: 0, z: 0, vx:0, vy:30e-3, vz:0, r:255, g:128, b:128 },
-      { x: AU+2, y: 0, z: 0, vx:0, vy:30e-3, vz:4e-7, r:128, g:255, b:128 },
-      { x: AU, y: 2, z: 0, vx:0, vy:30e-3, vz:0, r:128, g:128, b:255 },
-      { x: AU, y: 0, z: 2, vx:0, vy:30e-3, vz:0, r:255, g:255, b:0 }
+      { x: 0, y: 0, z: 0, vx:0, vy:30e-3, vz:0, r:255, g:128, b:128 },
+      { x: +2, y: 0, z: 0, vx:0, vy:30e-3, vz:4e-7, r:128, g:255, b:128 },
+      { x: 0, y: 2, z: 0, vx:0, vy:30e-3, vz:0, r:128, g:128, b:255 },
+      { x: 0, y: 0, z: 2, vx:0, vy:30e-3, vz:0, r:255, g:255, b:0 }
     ]
   },
 ];
@@ -175,53 +194,34 @@ function loadAll()
 const camera = { x: 0, y: 0, z: 10, phi: 0, theta: 0 };
 var spacecrafts;
 var states;
+var refstate;
 var indices;
 
 // Force modifiers:
-// w - induced rotation, can test with 1e-9
 // m - Yukawa mass (inverse range) in 1/AU
 // y - Yukawa coupling constant
 var MOD = { w: 0, m: 0, y: 0 };
 
-function ag(s)
+function a(s, refstate)
 {
-	var r = norm(s); // Math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z);
-	var r3 = r * r * r;
-	var GMY = GM * (1 + MOD.y * (1 - (1 + r*MOD.m/AU)*Math.exp(-r*MOD.m/AU)));
-	return new State(0, 0, 0, -GMY * s.x / r3, -GMY * s.y / r3, -GMY * s.z / r3);
+  var r = Math.sqrt((s.x + refstate.x) ** 2 + (s.y + refstate.y) ** 2 + (s.z + refstate.z) ** 2);
+  var r3 = r * r * r;
+  var GMY = GM * (1 + MOD.y * (1 - (1 + r*MOD.m/AU)*Math.exp(-r*MOD.m/AU)));
+  return new State(0, 0, 0, -GMY * (s.x + refstate.x) / r3, -GMY * (s.y + refstate.y) / r3, -GMY * (s.z + refstate.z) / r3);
 }
 
-function a(s)
+function rk4(s, dt, refstate)
 {
-  let a0 = ag(s);
-
-  let ex = states.reduce((a,b)=>({x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}));
-  let nx = norm(ex);
-  ex.x /= nx;
-  ex.y /= nx;
-  ex.z /= nx;
-
-  let r = norm(s);
-
-  a0.vx += MOD.w/r * (ex.y*s.z - ex.z*s.y);
-  a0.vy += MOD.w/r * (ex.z*s.x - ex.x*s.z);
-  a0.vz += MOD.w/r * (ex.x*s.y - ex.y*s.x);
-
-  return a0;
-}
-
-function rk4(s, dt)
-{
-  const k1 = a(s).add(new State(s.vx, s.vy, s.vz, 0, 0, 0));
-  const k2 = a(s.add(k1.multiply(dt / 2))).add(new State(s.vx + 0.5 * dt * k1.vx, s.vy + 0.5 * dt * k1.vy, s.vz + 0.5 * dt * k1.vz, 0, 0, 0));
-  const k3 = a(s.add(k2.multiply(dt / 2))).add(new State(s.vx + 0.5 * dt * k2.vx, s.vy + 0.5 * dt * k2.vy, s.vz + 0.5 * dt * k2.vz, 0, 0, 0));
-  const k4 = a(s.add(k3.multiply(dt))).add(new State(s.vx + dt * k3.vx, s.vy + dt * k3.vy, s.vz + dt * k3.vz, 0, 0, 0));
+  const k1 = a(s, refstate).add(new State(s.vx, s.vy, s.vz, 0, 0, 0));
+  const k2 = a(s.add(k1.multiply(dt / 2)), refstate).add(new State(s.vx + 0.5 * dt * k1.vx, s.vy + 0.5 * dt * k1.vy, s.vz + 0.5 * dt * k1.vz, 0, 0, 0));
+  const k3 = a(s.add(k2.multiply(dt / 2)), refstate).add(new State(s.vx + 0.5 * dt * k2.vx, s.vy + 0.5 * dt * k2.vy, s.vz + 0.5 * dt * k2.vz, 0, 0, 0));
+  const k4 = a(s.add(k3.multiply(dt)), refstate).add(new State(s.vx + dt * k3.vx, s.vy + dt * k3.vy, s.vz + dt * k3.vz, 0, 0, 0));
   return s.add(k1.add(k2.multiply(2)).add(k3.multiply(2)).add(k4).multiply(dt / 6));
 }
 
 var sunZ;
 
-function transformCoordinates(stateVectors)
+function transformCoordinates(stateVectors, refstate)
 {
   // Step 1: Find the geometric center
   let centerX = 0, centerY = 0, centerZ = 0;
@@ -239,7 +239,7 @@ function transformCoordinates(stateVectors)
   let newOrigin = {x: centerX, y: centerY, z: centerZ};
 
   // Step 3: Establish the new coordinate system
-  let zPrimeAxis = {x: centerX, y: centerY, z: centerZ};
+  let zPrimeAxis = {x: centerX + refstate.x, y: centerY + refstate.y, z: centerZ + refstate.z};
   let zPrimeAxisLength = Math.sqrt(zPrimeAxis.x**2 + zPrimeAxis.y**2 + zPrimeAxis.z**2);
   zPrimeAxis.x /= zPrimeAxisLength;
   zPrimeAxis.y /= zPrimeAxisLength;
@@ -272,6 +272,7 @@ function transformCoordinates(stateVectors)
   // Sanity check: Calculate the position of the Sun!
   // Should always be {x:0, y:0, z:-O(AU)}.
   {
+/*
     let dx = 0 - newOrigin.x;
     let dy = 0 - newOrigin.y;
     let dz = 0 - newOrigin.z;
@@ -286,6 +287,8 @@ function transformCoordinates(stateVectors)
       console.log({x:xPrime, y:yPrime, z: zPrime});
     }
     sunZ = zPrime;
+  */
+    sunZ = -norm(refstate);
   }
 
   return transformedCoordinates;
@@ -632,7 +635,8 @@ function doTR(rts, DT)
     let r13=rts.data[1].r13;
     let r14=rts.data[1].r14;
 
-/*  // Alternative method: explicitly calculating the trace
+/*
+  // Alternative method: explicitly calculating the trace
     let A = [[a12.x, a13.x, a14.x], [a12.y, a13.y, a14.y], [a12.z, a13.z, a14.z]];
     let R = [[r12.x, r13.x, r14.x], [r12.y, r13.y, r14.y], [r12.z, r13.z, r14.z]];
     let T = MM(A, inv3x3M(R));
@@ -651,16 +655,16 @@ function doTR(rts, DT)
   return NaN;
 }
 
-function eccentricity(state)
+function eccentricity(state, refstate)
 {
-  let r = Math.sqrt(state.x*state.x + state.y*state.y + state.z*state.z);
+  let r = Math.sqrt((state.x + refstate.x) ** 2 + (state.y + refstate.y) ** 2 + (state.z + refstate.z) ** 2);
   let v = Math.sqrt(state.vx*state.vx + state.vy*state.vy + state.vz*state.vz);
   let h = Math.sqrt(GM*r);
   let e = (v*v/GM - 1/r)/(v*v/GM + 1/r);
   return e; 
 }
 
-function avgeccentricity(states)
+function avgeccentricity(states, refstate)
 {
   let x = 0; let y = 0; let z = 0;
   let vx = 0; let vy = 0; let vz = 0;
@@ -674,6 +678,7 @@ function avgeccentricity(states)
     vz += states[i].vz;
   }
   x /= states.length; y /= states.length; z /= states.length;
+  x += refstate.x; y += refstate.y; z += refstate.z;
   vx /= states.length; vy /= states.length; vz /= states.length;
 
   let hx = y*vz - z*vy;
@@ -689,9 +694,9 @@ function avgeccentricity(states)
   return e; 
 }
 
-function orbitalPeriod(stateVector)
+function orbitalPeriod(stateVector, refstate)
 {
-  let r = Math.sqrt(stateVector.x*stateVector.x + stateVector.y*stateVector.y + stateVector.z*stateVector.z);
+  let r = Math.sqrt((stateVector.x + refstate.x) ** 2 + (stateVector.y + refstate.y) ** 2 + (stateVector.z + refstate.z) ** 2);
   let v = Math.sqrt(stateVector.vx*stateVector.vx + stateVector.vy*stateVector.vy + stateVector.vz*stateVector.vz);
   let epsilon = 0.5*v*v - GM/r;
   let a = -GM/2/epsilon;
@@ -699,7 +704,7 @@ function orbitalPeriod(stateVector)
   return T; 
 }
 
-function meanOrbitalPeriod(stateVectors)
+function meanOrbitalPeriod(stateVectors, refstate)
 {
   let sumX = 0; 
   let sumY = 0;
@@ -723,7 +728,7 @@ function meanOrbitalPeriod(stateVectors)
     vy: sumVy/stateVectors.length, 
     vz: sumVz/stateVectors.length
   };
-  return orbitalPeriod(mean); 
+  return orbitalPeriod(mean, refstate); 
 }
 
 var time = 0;
@@ -734,8 +739,8 @@ function propagate(dontMove = false, forward = true)
 	if (inPROP) return;
 	inPROP = true;
 
-	const DT = forward ? 1800 : -1800;
-	const NT = 48;
+	const DT = forward ? 900 : -900;
+	const NT = 96;
 	var traceM = 0;
 	var traceT = 0;
 	var traceE = 0;
@@ -743,21 +748,29 @@ function propagate(dontMove = false, forward = true)
 
 	if (!dontMove)
 	{
-	for (let i = 0; i < NT; i++)
-	{
-		for (let j = 0; j < states.length; j++)
-		{
-			states[j] = rk4(states[j], DT);
-		}
-		traceM = trM(states, DT);
-		traceT = trT(states, DT);
-		traceE = trE(states, DT);
-        traceW = trW(DT);
-		time += DT / 86400.0;
-	}
+    for (let i = 0; i < NT; i++)
+    {
+      for (let j = 0; j < states.length; j++)
+      {
+        states[j] = rk4(states[j], DT, refstate);
+      }
+      var newstate = rk4(refstate, DT, nullstate);
+      for (let j = 0; j < states.length; j++)
+      {
+        states[j].x += refstate.x - newstate.x;
+        states[j].y += refstate.y - newstate.y;
+        states[j].z += refstate.z - newstate.z;
+      }
+      refstate = newstate;
+      traceM = trM(states, DT);
+      traceT = trT(states, DT);
+      traceE = trE(states, DT);
+      traceW = trW(DT);
+      time += DT / 86400.0;
+    }
 	}
 
-	let theVolume = volume(transformCoordinates(states)).toFixed(2);
+	let theVolume = volume(transformCoordinates(states, refstate)).toFixed(2);
 	if (theVolume[0] != '-') theVolume = "&nbsp;" + theVolume;
 	traceM = traceM.toPrecision(5);
 	traceT = traceT.toPrecision(5);
@@ -816,7 +829,7 @@ function setView(v)
 
 function render()
 {
-	var spacecrafts = transformCoordinates(states);
+	var spacecrafts = transformCoordinates(states, refstate);
 	var v = document.getElementById("view").value * 1;
 
 	spacecrafts.forEach(sc =>
@@ -1021,12 +1034,16 @@ function onInit(init)
 	states = spacecrafts.map(spacecraft => new State(spacecraft.x, spacecraft.y, spacecraft.z,
 													spacecraft.vx, spacecraft.vy, spacecraft.vz,
 													spacecraft.r, spacecraft.g, spacecraft.b));
+//  refstate = spacecraftsets[init].refstate;
+  refstate = new State(spacecraftsets[init].refstate.x, spacecraftsets[init].refstate.y,
+                       spacecraftsets[init].refstate.z, spacecraftsets[init].refstate.vx,
+                       spacecraftsets[init].refstate.vy, spacecraftsets[init].refstate.vz, 1, 1, 1);
 
 	// Create an array of indices
 	indices = spacecrafts.map((_, index) => index);
 
-	document.getElementById("e").innerText = avgeccentricity(states).toFixed(4);
-	document.getElementById("T").innerText = (meanOrbitalPeriod(states)/86400).toFixed(2);
+	document.getElementById("e").innerText = avgeccentricity(states, refstate).toFixed(4);
+	document.getElementById("T").innerText = (meanOrbitalPeriod(states, refstate)/86400).toFixed(2);
 	propagate(true);
 }
 
@@ -1248,6 +1265,9 @@ let topView =
     avgX /= stateVectors.length;
     avgY /= stateVectors.length;
     avgZ /= stateVectors.length;
+    avgX += refstate.x;
+    avgY += refstate.y;
+    avgZ += refstate.z;
     let avgState = {x: avgX / AU, y: -avgY / AU, z: avgZ / AU};
 
     // Add latest state to buffer
