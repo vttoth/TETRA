@@ -4,6 +4,23 @@ const AU = 1.495978707e5;   // Mm
 var view = 3;  // Initial view (z-axis)
 var init = 0;  // Initial set (circular)
 var corr = 1;  // Tr to do 2nd order corrections?
+var sgna = 2;  // 0 = no Sagnac, 1 = velocities only, 2 = accelerations
+var lina = 0;  // Account for linear acceleration
+
+// Force modifiers:
+// m - Yukawa mass (inverse range) in 1/AU
+// y - Yukawa coupling constant
+var MOD = { w: 0, m: 0, y: 0 };
+
+var time = 0;
+
+var Tsum = 0;
+var Tdev = 0;
+var Tnum = 0;
+var Wsum = 0;
+var Wdev = 0;
+var Wnum = 0;
+
 
 const camera = { x: 0, y: 0, z: 10, phi: 0, theta: 0 };
 var spacecrafts;
@@ -46,7 +63,7 @@ const spacecraftsets = [
     name: "High ecc.",
     tail: 600,
     scale: AU,
-    step: 3600,
+    step: 600,
     refstate: { x: 0.6 * AU, y: 0, z: 0, vx: 0, vy: 0.0485, vz: 0 },
     states: [
       { x: -0.5, y: -0.5, z: -0.5, vx: 1e-7, vy:0.0485+1.7e-7, vz: 5e-7, r:255, g:128, b:128 },
@@ -59,7 +76,7 @@ const spacecraftsets = [
     name: "High ecc. (tiny)",
     tail: 600,
     scale: AU,
-    step: 3600,
+    step: 600,
     refstate: { x: 0.6 * AU, y: 0, z: 0, vx: 0, vy: 0.0485, vz: 0 },
     states: [
       { x: -0.5e-1, y: -0.5e-1, z: -0.5e-1, vx: 1e-8, vy:0.0485+1.7e-8, vz: 5e-8, r:255, g:128, b:128 },
@@ -72,13 +89,26 @@ const spacecraftsets = [
     name: "High ecc. (large)",
     tail: 600,
     scale: AU,
-    step: 3600,
+    step: 600,
     refstate: { x: 0.6 * AU, y: 0, z: 0, vx: 0, vy: 0.0485, vz: 0 },
     states: [
       { x: -0.5e1, y: -0.5e1, z: -0.5e1, vx: 2e-6, vy:0.0485+1.8e-6, vz: -2.2e-6, r:255, g:128, b:128 },
       { x: +0.5e1, y: -0.5e1, z:  0.5e1, vx: 1e-6, vy:0.0485-0.7e-6, vz:  2.2e-6, r:128, g:255, b:128 },
       { x: -0.5e1, y:  0.5e1, z:  0.5e1, vx:-1e-6, vy:0.0485+0.7e-6, vz:  2.2e-6, r:128, g:128, b:255 },
       { x: +0.5e1, y:  0.5e1, z: -0.5e1, vx:-2e-6, vy:0.0485-1.8e-6, vz: -2.2e-6, r:255, g:255, b:0 }
+    ]
+  },
+  {
+    name: "Medium eccentric",
+    tail: 1200,
+    scale: 2*AU,
+    step: 86400,
+    refstate: { x: 1*AU, y: 0, z: 0, vx: 0, vy: 35e-3, vz: 0},
+    states: [
+      { x: -1, y: -1, z: -3, vx:1e-10, vy:35e-3, vz:1e-9, r:255, g:128, b:128 },
+      { x: +1, y: -1, z: 2, vx:0, vy:35e-3-2e-9, vz:0, r:128, g:255, b:128 },
+      { x: -1, y: 1, z: 5, vx:0, vy:35e-3, vz:1e-9, r:128, g:128, b:255 },
+      { x: +1, y: 2, z: 2, vx:0, vy:35e-3-2e-9, vz:0, r:255, g:255, b:0 }
     ]
   },
   {
@@ -172,16 +202,27 @@ function saveAll()
   {
     init: init,
     view: view,
+    corr: corr,
+    sgna: sgna,
+    lina: lina,
     states: states,
     refstate: refstate,
     scale: scale,
     step: step,
-    time: time, top: 
+    time: time,
+    MOD: MOD,
+    Tsum: Tsum,
+    Tdev: Tdev,
+    Tnum: Tnum,
+    Wsum: Wsum,
+    Wdev: Wdev,
+    Wnum: Wnum,
+    top: 
     {
       size: topView.bufferSize,
-      buffer:topView.buffer
+      buffer: topView.buffer
     },
-    rts: {M: rtsM, T: rtsT},
+    rts: {M: rtsM, T: rtsT, W: rtsW},
     camera: camera
   });
 
@@ -212,19 +253,32 @@ function loadAll()
       let data = JSON.parse(reader.result);
       init = data.init;
       view = data.view;
+      corr = data.corr;
+      sgna = data.sgna;
+      lina = data.lina;
       scale = data.scale;
-      step: data.step;
+      step = data.step;
       time = data.time;
+      MOD = data.MOD;
+      Tsum = data.Tsum;
+      Tdev = data.Tdev;
+      Tnum = data.Tnum;
+      Wsum = data.Wsum;
+      Wdev = data.Wdev;
+      Wnum = data.Wnum;
       topView.bufferSize = data.top.size;
       topView.buffer = data.top.buffer;
       rtsM = [];
       rtsT = [];
+      rtsW = [];
       for (let K = 0; K < 4; K++)
       {
         rtsM.push(new TS(data.rts.M[K].size));
         rtsM[K].data = data.rts.M[K].data;
         rtsT.push(new TS(data.rts.T[K].size));
         rtsT[K].data = data.rts.T[K].data;
+        rtsW.push(new TS(data.rts.W[K].size));
+        rtsW[K].data = data.rts.W[K].data;
       }
       camera.x = data.camera.x;
       camera.y = data.camera.y;
@@ -251,12 +305,6 @@ function loadAll()
   });
   fileInput.click();
 }
-
-
-// Force modifiers:
-// m - Yukawa mass (inverse range) in 1/AU
-// y - Yukawa coupling constant
-var MOD = { w: 0, m: 0, y: 0 };
 
 function rk4(s, dt, refstate)
 {
@@ -325,27 +373,7 @@ function transformCoordinates(stateVectors, refstate)
             r: stateVectors[i].r, g: stateVectors[i].g, b: stateVectors[i].b});
   }
 
-  // Sanity check: Calculate the position of the Sun!
-  // Should always be {x:0, y:0, z:-O(AU)}.
-  {
-/*
-    let dx = 0 - newOrigin.x;
-    let dy = 0 - newOrigin.y;
-    let dz = 0 - newOrigin.z;
-    let xPrime = dx * xPrimeAxis.x + dy * xPrimeAxis.y + dz * xPrimeAxis.z;
-    let yPrime = dx * (zPrimeAxis.y * xPrimeAxis.z - zPrimeAxis.z * xPrimeAxis.y)
-               + dy * (zPrimeAxis.z * xPrimeAxis.x - zPrimeAxis.x * xPrimeAxis.z)
-               + dz * (zPrimeAxis.x * xPrimeAxis.y - zPrimeAxis.y * xPrimeAxis.x);
-    let zPrime = dx * zPrimeAxis.x + dy * zPrimeAxis.y + dz * zPrimeAxis.z;
-    if (Math.abs(xPrime) > 1 || Math.abs(yPrime) > 1)
-    {
-      console.log("The SUN is not where it is supposed to be!");
-      console.log({x:xPrime, y:yPrime, z: zPrime});
-    }
-    sunZ = zPrime;
-  */
-    sunZ = -norm(refstate);
-  }
+  sunZ = -norm(refstate);  // Approximate position of the Sun
 
   return transformedCoordinates;
 }
@@ -476,27 +504,27 @@ class TS
 var rtsM = [];
 var rtsT = [];
 var rtsW = [];
-var rtsE = [];
+
 for (let K = 0; K < 4; K++)
 {
   rtsM.push(new TS(3));
   rtsT.push(new TS(3));
   rtsW.push(new TS(3));
-  rtsE.push(new TS(3));
 }
 
 function trT(states, DT, K=0)
 {
+  let r1 = {x:states[K].x + refstate.x, y:states[K].y + refstate.y, z: states[K].z + refstate.z};
   let r12 = {x:states[(K+1)%4].x - states[K].x, y:states[(K+1)%4].y - states[K].y, z: states[(K+1)%4].z - states[K].z};
   let r13 = {x:states[(K+2)%4].x - states[K].x, y:states[(K+2)%4].y - states[K].y, z: states[(K+2)%4].z - states[K].z};
   let r14 = {x:states[(K+3)%4].x - states[K].x, y:states[(K+3)%4].y - states[K].y, z: states[(K+3)%4].z - states[K].z};
 
-  let n = vadd(refstate, states[K]);
-  //let n = refstate;
+  //let n = vadd(refstate, states[K]);
+  let n = refstate;
   let r = norm(n);
   n = smul(1/r, n);
 
-  rtsT[K].push({r12:r12, r13:r13, r14:r14, r:r, n:n});
+  rtsT[K].push({r1: r1, r12:r12, r13:r13, r14:r14, r:r, n:n});
 
   return doTR(rtsT[K], DT);
 }
@@ -515,7 +543,12 @@ function trM(states, DT, K=0)
   // in a reference frame affixed to the satellite constellation
   let r12={x:a, y:0, z:0};
   let r13={x:(a**2 + b**2 - c**2)/(2*a), y:Math.sqrt(b**2 - ((a**2 + b**2 - c**2)/(2*a))**2), z:0};
-  let r14={x:(a**2 + d**2 - e**2)/(2*a), y:(b**2 + d**2 - f**2 - ((a**2 + d**2 - e**2)*(a**2 + b**2 - c**2))/(2*a**2))/(2*Math.sqrt(b**2 - ((a**2 + b**2 - c**2)/(2*a))**2)), z:Math.sqrt(d**2 - ((a**2 + d**2 - e**2)/(2*a))**2 - ((b**2 + d**2 - f**2 - ((a**2 + d**2 - e**2)*(a**2 + b**2 - c**2))/(2*a**2))/(2*Math.sqrt(b**2 - ((a**2 + b**2 - c**2)/(2*a))**2)))**2)};
+  let r14={x:(a**2 + d**2 - e**2)/(2*a),
+           y:(b**2 + d**2 - f**2 - ((a**2 + d**2 - e**2)*(a**2 + b**2 - c**2))/(2*a**2))/
+            (2*Math.sqrt(b**2 - ((a**2 + b**2 - c**2)/(2*a))**2)),
+           z:Math.sqrt(d**2 - ((a**2 + d**2 - e**2)/(2*a))**2 -
+                       ((b**2 + d**2 - f**2 - ((a**2 + d**2 - e**2)*(a**2 + b**2 - c**2))/(2*a**2))/
+             (2*Math.sqrt(b**2 - ((a**2 + b**2 - c**2)/(2*a))**2)))**2)};
 
   // We now compute the unit vectors of the satellite-fixed frame
   let ex = vadd(states[(K+1)%4], smul(-1, states[K]));
@@ -527,8 +560,8 @@ function trM(states, DT, K=0)
 
   // The Sun-to-origin direction in this frame is obtained by
   // projecting that vector onto the unit vectors
-  let n = vadd(refstate, states[K]);
-  //let n = refstate;
+  //let n = vadd(refstate, states[K]);
+  let n = refstate;
   let r = norm(n);
   n = {x: dot(n, ex), y: dot(n, ey), z: dot(n, ez)};
   n = smul(1/norm(n), n);
@@ -539,61 +572,123 @@ function trM(states, DT, K=0)
   // of the tetrahedron matches that of the reference frame, by
   // projecting vertex D onto the ez axis:
   if (dot(ez,vadd(states[(K+3)%4],smul(-1,states[0]))) * r14.z < 0) r14.z = -r14.z;
-  //if (dot(ez,vadd(states[(K+3)%4],smul(-1,states[0]))) * r14.z < 0) n.z = -n.z;
 
-  rtsM[K].push({r12:r12, r13:r13, r14:r14, r:r, n:n});
+  rtsM[K].push({r12:r12, r13:r13, r14:r14, r:r, n:n, ex:ex, ey:ey, ez:ez});
 
-  return doTR(rtsM[K], DT);
+  return 0;
 }
 
-function trE(states, DT, K=0)
-{
-  // What we want is the same calculation with respect to the "satellite" frame.
-
-  let r12 = {x:states[(K+1)%4].x - states[0].x, y:states[(K+1)%4].y - states[0].y, z: states[(K+1)%4].z - states[0].z};
-  let r13 = {x:states[(K+2)%4].x - states[0].x, y:states[(K+2)%4].y - states[0].y, z: states[(K+2)%4].z - states[0].z};
-  let r14 = {x:states[(K+3)%4].x - states[0].x, y:states[(K+3)%4].y - states[0].y, z: states[(K+3)%4].z - states[0].z};
-
-  let ex = states.reduce((a,b)=>({x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}));
-  let nx = norm(ex);
-  ex.x /= nx;
-  ex.y /= nx;
-  ex.z /= nx;
-
-  let ev = states.reduce((a,b)=>({vx:a.vx+b.vx,vy:a.vy+b.vy,vz:a.vz+b.vz}));
-
-  let ez = {x:ex.y*ev.vz - ex.z*ev.vy, y:ex.z*ev.vx - ex.x*ev.vz, z:ex.x*ev.vy - ex.y*ev.vx};
-  let nz = norm(ez);
-  ez.x /= nz;
-  ez.y /= nz;
-  ez.z /= nz;
-
-  let ey = {x:ez.y*ex.z-ez.z*ex.y, y:ez.z*ex.x -ez.x*ex.z, z:ez.x*ex.y - ez.y*ex.x};
-
-  let R12 = {x:dot(r12,ex), y:dot(r12,ey), z:dot(r12,ez)};
-  let R13 = {x:dot(r13,ex), y:dot(r13,ey), z:dot(r13,ez)};
-  let R14 = {x:dot(r14,ex), y:dot(r14,ey), z:dot(r14,ez)};
-
-  rtsE[K].push({r12:R12, r13:R13, r14:R14});
-
-  return doTR(rtsE[K], DT);
-}
-
-function Sagnac(ri, rj, vi, vj)
+function SagnacDiff2(rki, rkj, vki, vkj, aki, akj, ak)
 {
   const c = 299.792458; // Mm/s
 
-  let t1i = (dot(vi,ri) + Math.sqrt(dot(vi,ri)**2 + (c**2-dot(vi,vi))*dot(ri,ri))) / (c**2 - dot(vi,vi));
-  let rij = vadd(rj, smul(-1, ri));
-  let vij = vadd(vj, smul(-1, vi));
-  let bij = dot(vadd(rij, smul(t1i, vij)), vj);
-  let tij = (bij + Math.sqrt(bij**2 + (c**2 - dot(vj,vj))*dot(vadd(rij, smul(t1i, vij)),vadd(rij, smul(t1i, vij))))) / (c**2 - dot(vj,vj));
-  let tj1 = Math.sqrt(dot(vadd(rj, smul((t1i+tij), vj)), vadd(rj, smul((t1i+tij), vj)))) / c;
+// ABC loop
+  let tki = 0, tki2 = 0;
+  let count = 10;
+  do
+  {
+    tki = tki2;
+    tki2 = norm(vadd(vadd(rki, smul(tki, vki)), smul(0.5*tki*tki, vadd(aki, ak)))) / c;
+  } while (Math.abs(tki - tki2) > 1e-17 && count-- > 0);
+  if (count <= 0) console.log("SAGNAC failed to converge for tki: " + tki + ", " + tki2);
+  tki = tki2;
 
-  return t1i + tij + tj1;
+  let rij = vadd(rkj, smul(-1, rki));
+  let vij = vadd(vkj, smul(-1, vki));
+  let tij = 0, tij2 = 0;
+  count = 10;
+  do
+  {
+    tij = tij2;
+    tij2 = norm(
+             vadd(
+               vadd(
+                 vadd(rkj,smul(tki+tij, vkj)),
+                 smul(0.5*(tki+tij)**2, (akj, ak))
+               ),
+               smul(-1, vadd(
+                 vadd(rki, smul(tki, vki)),
+                 smul(0.5*tki*tki, vadd(aki, ak))
+               ))
+             )
+           ) / c;
+  } while (Math.abs(tij - tij2) > 1e-17 && count-- > 0);
+  if (count <= 0) console.log("SAGNAC failed to converge for tij: " + tij + ", " + tij2);
+  tij = tij2;
+
+  let tjk = 0, tjk2 = 0;
+  count = 10;
+  do
+  {
+    tjk = tjk2;
+    tjk2 = norm(
+             vadd(
+               vadd(rkj,smul(tki+tij, vkj)),
+               vadd(smul(0.5*(tki+tij)**2, vadd(akj, ak)), smul(0.5*(tki+tij+tjk)**2, ak))
+             )
+           ) / c;
+  } while (Math.abs(tjk - tjk2) > 1e-17 && count-- > 0);
+  if (count <= 0) console.log("SAGNAC failed to converge for tjk: " + tjk + ", " + tjk2);
+  tjk = tjk2;
+
+
+// ACB loop
+  let tkj = 0, tkj2 = 0;
+  count = 10;
+  do
+  {
+    tkj = tkj2;
+    tkj2 = norm(vadd(vadd(rkj, smul(tkj, vkj)), smul(0.5*tkj*tkj, vadd(akj, ak)))) / c;
+  } while (Math.abs(tkj - tkj2) > 1e-17 && count-- > 0);
+  if (count <= 0) console.log("SAGNAC failed to converge for tkj: " + tkj + ", " + tkj2);
+  tkj = tkj2;
+
+  let rji = vadd(rki, smul(-1, rkj));
+  let vji = vadd(vki, smul(-1, vkj));
+  let tji = 0, tji2 = 0;
+  count = 10;
+  do
+  {
+    tji = tji2;
+    tji2 = norm(
+             vadd(
+               vadd(
+                 vadd(rki,smul(tkj+tji, vki)),
+                 smul(0.5*(tkj+tji)**2, vadd(aki, ak))
+               ),
+               smul(-1, vadd(
+                 vadd(rkj, smul(tkj, vkj)),
+                 smul(0.5*tkj*tkj, vadd(akj, ak))
+               ))
+             )
+           ) / c;
+  } while (Math.abs(tji - tji2) > 1e-17 && count-- > 0);
+  if (count <= 0) console.log("SAGNAC failed to converge for tji: " + tji + ", " + tji2);
+  tji = tji2;
+
+  let tik = 0, tik2 = 0;
+  count = 10;
+  do
+  {
+    tik = tik2;
+    tik2 = norm(
+             vadd(
+               vadd(rki,smul(tkj+tji, vki)),
+               vadd(smul(0.5*(tkj+tji)**2, vadd(aki, ak)), smul(0.5*(tkj+tji+tik)**2, ak))
+             )
+           ) / c;
+  } while (Math.abs(tik - tik2) > 1e-17 && count-- > 0);
+  if (count <= 0) console.log("SAGNAC failed to converge for tik: " + tik + ", " + tik2);
+  tik = tik2;
+
+  let dt = tki - tik;
+  dt += tij - tji;
+  dt += tjk - tkj;
+
+  return dt;
 }
 
-function SagnacDiff(ri, rj, vi, vj)
+function SagnacDiff1(ri, rj, vi, vj)
 {
   const c = 299.792458; // Mm/s
 
@@ -611,19 +706,70 @@ function SagnacDiff(ri, rj, vi, vj)
   let tji = (bji + Math.sqrt(bji**2 + (c**2 - dot(vi,vi))*dot(vadd(rji, smul(t1j, vji)),vadd(rji, smul(t1j, vji))))) / (c**2 - dot(vi,vi));
   let ti1 = Math.sqrt(dot(vadd(ri, smul((t1j+tji), vi)), vadd(ri, smul((t1j+tji), vi)))) / c;
 
-  //let dt = t1i - t1j;
-  //dt += tij - tji;
-  //dt += tj1 - ti1;
   let dt = t1i - ti1;
   dt += tij - tji;
   dt += tj1 - t1j;
 
-// The quantities exceed the differences by a factor of 10^10 or so, limiting accuracy
-//console.log("t1i: " + t1i + ", ti1: " + ti1 + ", diff: " + (t1i - ti1));
-//console.log("tij: " + tij + ", tji: " + tji + ", diff: " + (tij - tji));
-//console.log("tj1: " + tj1 + ", t1j: " + t1j + ", diff: " + (tj1 - t1j));
-
   return dt;
+}
+
+function SagnacDiff(ri, rj, vi, vj, ai, aj, a)
+{
+  switch (1 * sgna)
+  {
+  case 1: return SagnacDiff1(ri, rj, vi, vj);
+  case 2: return SagnacDiff2(ri, rj, vi, vj, ai, aj, a);
+  }
+  return 0;
+}
+
+function RangeDiff(rki, vki, aki, a)
+{
+  const c = 299.792458; // Mm/s
+  let count = 10;
+  let t1ki = 0;
+  let t1ki2 = 0;
+  do
+  {
+    t1ki = t1ki2;
+    t1ki2 = norm(vadd(rki, vadd(smul(t1ki, vki), smul(0.5*t1ki*t1ki, vadd(aki, a)))));
+  } while (Math.abs(t1ki - t1ki2) > 1e-17 && count-- > 0);
+  t1ki = t1ki2;
+
+  let t1ik = 0;
+  let t1ik2 = 0;
+  count = 10;
+  do
+  {
+    t1ik = t1ik2;
+    t1ik2 = norm(vadd(vadd(rki, smul(t1ki, vki)), vadd(smul(0.5*t1ki*t1ki, vadd(aki, a)), smul(0.5*(t1ki+t1ik)**2, a))));
+  } while (Math.abs(t1ik - t1ik2) > 1e-17 && count-- > 0);
+  t1ik = t1ik2;
+
+  let t2ik = 0;
+  let t2ik2 = 0;
+  count = 10;
+  do
+  {
+    t2ik = t2ik2;
+    t2ik2 = norm(vadd(smul(0.5*t2ik*t2ik, a), rki));
+  } while (Math.abs(t2ik - t2ik2) > 1e-17 && count-- > 0);
+  t2ik = t2ik2;
+
+  let t2ki = 0;
+  let t2ki2 = 0;
+  count = 10;
+  do
+  {
+    t2ki = t2ki2;
+    t2ki2 = norm(vadd(vadd(smul(-1, rki), smul(-0.5*t2ik*t2ik, a)), vadd(smul(t2ik+t2ki, vki), smul(0.5*(t2ik+t2ki)**2, vadd(aki, a)))));
+  } while (Math.abs(t2ki - t2ki2) > 1e-17 && count-- > 0);
+  t2ki = t2ki2;
+
+//console.log("t1ki=" + t1ki + ", t1ik=" + t1ik + ", t2ik=" + t2ik + ", t2ki=" + t2ki);
+  let dt = t1ki - t2ik;
+  dt += t1ik - t2ki;
+  return dt / c;
 }
 
 function trW(DT, K=0)
@@ -646,22 +792,41 @@ function trW(DT, K=0)
   let v13 = smul(1/(2*DT), vadd(rtsT[K].data[2].r13, smul(-1, rtsT[K].data[0].r13)));
   let v14 = smul(1/(2*DT), vadd(rtsT[K].data[2].r14, smul(-1, rtsT[K].data[0].r14)));
 
+  // Accelerations of the same
+  let a1 = {x:0, y:0, z:0};
+  if (lina)
+  {
+    a1 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r1, rtsT[K].data[2].r1),
+                                   smul(-2, rtsT[K].data[1].r1)));
+  }
+  let a12 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r12, rtsT[K].data[2].r12),
+                                 smul(-2, rtsT[K].data[1].r12)));
+  let a13 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r13, rtsT[K].data[2].r13),
+                                 smul(-2, rtsT[K].data[1].r13)));
+  let a14 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r14, rtsT[K].data[2].r14),
+                                 smul(-2, rtsT[K].data[1].r14)));
+
   // The actual Sagnac-type time differences
-  //let w123 = Sagnac(r12, r13, v12, v13) - Sagnac(r13, r12, v13, v12);
-  //let w134 = Sagnac(r13, r14, v13, v14) - Sagnac(r14, r13, v14, v13);
-  //let w142 = Sagnac(r14, r12, v14, v12) - Sagnac(r12, r14, v12, v14);
-  let w123 = SagnacDiff(r12, r13, v12, v13);
-  let w134 = SagnacDiff(r13, r14, v13, v14);
-  let w142 = SagnacDiff(r14, r12, v14, v12);
+  let w123 = SagnacDiff(r12, r13, v12, v13, a12, a13, a1);
+  let w134 = SagnacDiff(r13, r14, v13, v14, a13, a14, a1);
+  let w142 = SagnacDiff(r14, r12, v14, v12, a14, a12, a1);
 
-//console.log("w134: " + w134 + ", w142: " + w142 + ", w123: " + w123);
+  // The actual range differences
+  let t121, t131, t141;
+  if (lina)
+  {
+    t121 = RangeDiff(r12, v12, a12, a1);
+    t131 = RangeDiff(r13, v13, a13, a1);
+    t141 = RangeDiff(r14, v14, a14, a1);
+//console.log("t121 = " + t121);
+//console.log("t131 = " + t131);
+//console.log("t141 = " + t141);
+  }
 
-  //
   //
   // From this point on, all we are allowed to use are w1..w3 and rtsM
   // as only this information will be available on board. We are now
   // in the satellite-fixed noninertial reference frame.
-  //
   //
 
   r12 = rtsM[K].data[1].r12;
@@ -672,16 +837,24 @@ function trW(DT, K=0)
   v12 = smul(1/(2*DT), vadd(rtsM[K].data[2].r12, smul(-1, rtsM[K].data[0].r12)));
   v13 = smul(1/(2*DT), vadd(rtsM[K].data[2].r13, smul(-1, rtsM[K].data[0].r13)));
   v14 = smul(1/(2*DT), vadd(rtsM[K].data[2].r14, smul(-1, rtsM[K].data[0].r14)));
+  a12 = smul(1/(DT*DT), vadd(vadd(rtsM[K].data[0].r12, rtsM[K].data[2].r12),
+                             smul(-2, rtsM[K].data[1].r12)));
+  a13 = smul(1/(DT*DT), vadd(vadd(rtsM[K].data[0].r13, rtsM[K].data[2].r13),
+                             smul(-2, rtsM[K].data[1].r13)));
+  a14 = smul(1/(DT*DT), vadd(vadd(rtsM[K].data[0].r14, rtsM[K].data[2].r14),
+                             smul(-2, rtsM[K].data[1].r14)));
 
   // We now solve for the angular velocity vector w.
   let w = {x:0, y:0, z:0};
-  let eps = 1e-11;
+  let eps = 1e-8;
   let dx = {x:eps, y:0, z:0};
   let dy = {x:0, y:eps, z:0};
   let dz = {x:0, y:0, z:eps};
 
+  a1 = {x:0, y:0, z:0};
+
   // Helper function to calculate modeled Sagnac-type observables
-  function m1234(w, r12, r13, r14, v12, v13, v14)
+  function m1234(w, r12, r13, r14, v12, v13, v14, a12, a13, a14, a1)
   {
     let w12 = vadd(v12, X(r12, w));
     let w13 = vadd(v13, X(r13, w));
@@ -689,62 +862,100 @@ function trW(DT, K=0)
 
     let m =
     {
-//      m123: Sagnac(r12, r13, w12, w13) - Sagnac(r13, r12, w13, w12),
-//      m134: Sagnac(r13, r14, w13, w14) - Sagnac(r14, r13, w14, w13),
-//      m142: Sagnac(r14, r12, w14, w12) - Sagnac(r12, r14, w12, w14),
-      m123: SagnacDiff(r12, r13, w12, w13),
-      m134: SagnacDiff(r13, r14, w13, w14),
-      m142: SagnacDiff(r14, r12, w14, w12)
+      m123: SagnacDiff(r12, r13, w12, w13, a12, a13, a1),
+      m134: SagnacDiff(r13, r14, w13, w14, a13, a14, a1),
+      m142: SagnacDiff(r14, r12, w14, w12, a14, a12, a1)
     };
     return m;
   };
 
-  // The solution converges rapidly so 10 iterations are sufficient.
-  let count = 10;
-  let m;
-  let D = {x:0, y:0, z:0};
-  let F = {x:0, y:0, z:0};
-  do
+  // And a helper to calculate the range-type observables
+  function T1234(w, r12, r13, r14, v12, v13, v14, a12, a13, a14, a1)
   {
-    w = vadd(w, D);
-
-    m = m1234(w, r12, r13, r14, v12, v13, v14);
-
-    // Calculating a gradient matrix J in our solution space
-    let mx = m1234(vadd(w, dx), r12, r13, r14, v12, v13, v14);
-    let my = m1234(vadd(w, dy), r12, r13, r14, v12, v13, v14);
-    let mz = m1234(vadd(w, dz), r12, r13, r14, v12, v13, v14);
-
-    let J = [[(mx.m123-m.m123)/eps, (my.m123-m.m123)/eps, (mz.m123-m.m123)/eps],
-             [(mx.m134-m.m134)/eps, (my.m134-m.m134)/eps, (mz.m134-m.m134)/eps],
-             [(mx.m142-m.m142)/eps, (my.m142-m.m142)/eps, (mz.m142-m.m142)/eps]];
-
-    F = {x:w123 - m.m123, y:w134 - m.m134, z:w142 - m.m142};
-    D = Mmul(inv3x3M(J), F);
-  
-  } while (--count > 0 && Math.sqrt(dot(F,F)) > 2e-17);
-
-  if (count < 1)
-  {
-    console.log("Insufficient accuracy: " + Math.sqrt(dot(F,F)));
+    let w12 = vadd(v12, X(r12, w));
+    let w13 = vadd(v13, X(r13, w));
+    let w14 = vadd(v14, X(r14, w));
+    let T =
+    {
+      T121: RangeDiff(r12, w12, a12, a1),
+      T131: RangeDiff(r13, w13, a13, a1),
+      T141: RangeDiff(r14, w14, a14, a1)
+    };
+    return T;
   }
 
-//console.log("COUNT = " + count);
-//console.log(D);
-//console.log("m134: " + m.m134 + ", m142: " + m.m142 + ", m123: " + m.m123);
-//console.log(w);
+  // The solution converges rapidly so 10 iterations are sufficient.
+  let count = 10;
+  var count1, count2;
+  let m;
+  let T;
+  let Dw = {x:0, y:0, z:0};
+  let Fw = {x:0, y:0, z:0};
+  let Da = {x:0, y:0, z:0};
+  let Fa = {x:0, y:0, z:0};
+  do
+  {
+    count1 = 10;
+    count2 = 10;
+    do
+    {
+      w = vadd(w, Dw);
 
-  // We can now calculate the velocities of the 234 vertices wrt. 1
-//  let u12 = X(w, smul(0.5, vadd(rtsM[K].data[0].r12, rtsM[K].data[1].r12)));
-//  let u13 = X(w, smul(0.5, vadd(rtsM[K].data[0].r13, rtsM[K].data[1].r13)));
-//  let u14 = X(w, smul(0.5, vadd(rtsM[K].data[0].r14, rtsM[K].data[1].r14)));
-//console.log(u12);
-//console.log(u13);
-//console.log(u14);
+      m = m1234(w, r12, r13, r14, v12, v13, v14, a12, a13, a14, a1);
+
+      // Calculating a gradient matrix J in our solution space
+      let mx = m1234(vadd(w, dx), r12, r13, r14, v12, v13, v14, a12, a13, a14, a1);
+      let my = m1234(vadd(w, dy), r12, r13, r14, v12, v13, v14, a12, a13, a14, a1);
+      let mz = m1234(vadd(w, dz), r12, r13, r14, v12, v13, v14, a12, a13, a14, a1);
+
+      let J = [[(mx.m123-m.m123)/eps, (my.m123-m.m123)/eps, (mz.m123-m.m123)/eps],
+               [(mx.m134-m.m134)/eps, (my.m134-m.m134)/eps, (mz.m134-m.m134)/eps],
+               [(mx.m142-m.m142)/eps, (my.m142-m.m142)/eps, (mz.m142-m.m142)/eps]];
+
+      Fw = {x:w123 - m.m123, y:w134 - m.m134, z:w142 - m.m142};
+      Dw = Mmul(inv3x3M(J), Fw);
+  
+    } while (--count1 > 0 && Math.sqrt(dot(Fw,Fw)) > 2e-17);
+
+    if (count1 < 1)
+    {
+      console.log("Insufficient accuracy computing w: " + Math.sqrt(dot(Fw,Fw)));
+    }
+
+    if (lina)
+    {
+      do
+      {
+        a1 = vadd(a1, Da);
+
+        T = T1234(w, r12, r13, r14, v12, v13, v14, a12, a13, a14, a1);
+
+        let Tx = T1234(w, r12, r13, r14, v12, v13, v14, a12, a13, a14, vadd(a1, dx));
+        let Ty = T1234(w, r12, r13, r14, v12, v13, v14, a12, a13, a14, vadd(a1, dy));
+        let Tz = T1234(w, r12, r13, r14, v12, v13, v14, a12, a13, a14, vadd(a1, dz));
+
+        let J = [[(Tx.T121-T.T121)/eps, (Ty.T121-T.T121)/eps, (Tz.T121-T.T121)/eps],
+                 [(Tx.T131-T.T131)/eps, (Ty.T131-T.T131)/eps, (Tz.T131-T.T131)/eps],
+                 [(Tx.T141-T.T141)/eps, (Ty.T141-T.T141)/eps, (Tz.T141-T.T141)/eps]];
+
+        Fa = {x:t121 - T.T121, y:t131 - T.T131, z:t141 - T.T141};
+        Da = Mmul(inv3x3M(J), Fa);
+      } while (--count2 > 0 && Math.sqrt(dot(Fa,Fa)) > 2e-17);
+      if (count2 < 1)
+      {
+        console.log("Insufficient accuracy computing a: " + Math.sqrt(dot(Fa,Fa)));
+      }
+    }
+  } while (lina && (count1 <= 8 || count2 <= 8) && --count > 0);
+  if ((lina ? count : count1) < 1)
+  {
+    console.log("Gauss-Seidel failed to converge.");
+  }
 
   // Constructing the rotation matrix using Rodrigues' formula
   let W = Math.sqrt(dot(w,w));
   let theta = W*DT;
+  if (W == 0) W = 1;
   let I = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   let Q = [[0, -w.z/W, w.y/W], [w.z/W, 0, -w.x/W], [-w.y/W, w.x/W, 0]];
 
@@ -759,8 +970,6 @@ function trW(DT, K=0)
   //let n = Mmul(R, rtsM[K].data[0].n);
   //let n = rtsM[K].data[0].n;
 
-  //rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[0].r, n:n});
-  //rtsW[K].push({r12:r12, r13:r13, r14:r14});
   rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[1].r, n:rtsM[K].data[1].n});
 
   // The middle position is left alone
@@ -772,16 +981,13 @@ function trW(DT, K=0)
   r13 = Mmul(R, rtsM[K].data[2].r13);
   r14 = Mmul(R, rtsM[K].data[2].r14);
 
-  //n = Mmul(R, rtsM[K].data[2].n);
-
-  //rtsW[K].push({r12:r12, r13:r13, r14:r14});
-  //rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[2].r, n:n});
   rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[1].r, n:rtsM[K].data[1].n});
 
-  return doTR(rtsW[K], DT);
+  //return doTR(rtsW[K], DT, w);
+  return doTR(rtsW[K], DT, lina ? a1 : null);
 }
 
-function doTR(rts, DT)
+function doTR(rts, DT, a1 = null)
 {
   if (rts.data.length == 3)
   {
@@ -800,52 +1006,39 @@ function doTR(rts, DT)
     let r14=rts.data[1].r14;
 
 
-    if (corr*1 == 1 && ("n" in rts.data[1]))
+    if (corr == 1 && ("n" in rts.data[1]))
     {
       let n = rts.data[1].n;
       let r = rts.data[1].r;
-/*
-      let da12 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r12)**2, n) , X(r12, X(r12, n))));
-      let da13 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r13)**2, n) , X(r13, X(r13, n))));
-      let da14 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r14)**2, n) , X(r14, X(r14, n))));
-*/
 
-//  (%i1) taylor((1+2*x)^(-3/2),x,0,2);
-//                                            2
-//                                        15 x
-//  (%o1)/T/                    1 - 3 x + ----- + . . .
-//                                          2
-// 
-//  x = (ri.rij)/|ri|^2 = (n.rij)/r
-
-
-      let da12 = smul(-3*GM/r**4, vadd(smul(-2.5 * dot(n, r12)**2, n), vadd(smul(1.5*norm(r12)**2, n) , X(r12, X(r12, n)))));
-      let da13 = smul(-3*GM/r**4, vadd(smul(-2.5 * dot(n, r13)**2, n), vadd(smul(1.5*norm(r13)**2, n) , X(r13, X(r13, n)))));
-      let da14 = smul(-3*GM/r**4, vadd(smul(-2.5 * dot(n, r14)**2, n), vadd(smul(1.5*norm(r14)**2, n) , X(r14, X(r14, n)))));
-
+      let da12 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r12)**2 - 2.5 * dot(n, r12)**2, n), X(r12, X(r12, n))));
+      let da13 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r13)**2 - 2.5 * dot(n, r13)**2, n), X(r13, X(r13, n))));
+      let da14 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r14)**2 - 2.5 * dot(n, r14)**2, n), X(r14, X(r14, n))));
 
       a12 = vadd(a12, da12);
       a13 = vadd(a13, da13);
       a14 = vadd(a14, da14);
-
     }
-
-
-/*
-  // Alternative method: explicitly calculating the trace
-    let A = [[a12.x, a13.x, a14.x], [a12.y, a13.y, a14.y], [a12.z, a13.z, a14.z]];
-    let R = [[r12.x, r13.x, r14.x], [r12.y, r13.y, r14.y], [r12.z, r13.z, r14.z]];
-    let T = MM(A, inv3x3M(R));
-    console.log(T);
-    let tr = T[0][0] + T[1][1] + T[2][2];
-*/
 
     let V2 = dot(r12,X(r13,r14));
     let V3 = dot(r13,X(r14,r12));
     let V4 = dot(r14,X(r12,r13));
+    let V = (V2+V3+V4) / 3.0;
 
-    let tr = dot(a12,X(r13,r14))/V2 + dot(a13,X(r14,r12))/V3 + dot(a14,X(r12,r13))/V4;
+    let tr = (dot(a12,X(r13,r14)) + dot(a13,X(r14,r12)) + dot(a14,X(r12,r13))) / V;
 
+    // Alternative method: explicitly calculating the trace
+    if (a1 != null)
+    {
+      let A = [[a12.x, a13.x, a14.x],
+               [a12.y, a13.y, a14.y],
+               [a12.z, a13.z, a14.z]];
+      let R = [[r12.x, r13.x, r14.x], [r12.y, r13.y, r14.y], [r12.z, r13.z, r14.z]];
+      let T = MM(A, inv3x3M(R));
+      let tr2 = T[0][0] + T[1][1] + T[2][2];
+
+      return tr2;
+    }
     return tr;
   }
   return NaN;
@@ -883,9 +1076,6 @@ function avgeccentricity(states, refstate)
   let h = Math.sqrt(hx*hx + hy*hy + hz*hz);
   let r = Math.sqrt(x*x + y*y + z*z);
   let v = Math.sqrt(vx*vx + vy*vy + vz*vz);
-//  let a = 1 / (2/r - v*v/GM);
-//  let e = Math.sqrt(1 - h*h/a/GM);
-
   let e = Math.sqrt(1 + h*h/GM/GM*(v*v-2*GM/r));
   return e; 
 }
@@ -927,7 +1117,6 @@ function meanOrbitalPeriod(stateVectors, refstate)
   return orbitalPeriod(mean, refstate); 
 }
 
-var time = 0;
 var inPROP = false;
 
 function propagate(dontMove = false, forward = true)
@@ -940,28 +1129,20 @@ function propagate(dontMove = false, forward = true)
   if (NT > 96) NT = 96;
   if (NT < 1) NT = 1;
 
-  var traceM = 0;   // Rotating satellite-fixed system
   var traceT = 0;   // Inertial system
-  var traceE = 0;   // Sun-facing (rotating) coordinate system
   var traceW = 0;   // Derotated satellite-fixed system
 
-  var stdevM = 0;
   var stdevT = 0;
-  var stdevE = 0;
   var stdevW = 0;
 
   if (!dontMove)
   {
     for (let i = 0; i < NT; i++)
     {
-      traceM = 0;
       traceT = 0;
-      traceE = 0;
       traceW = 0;
 
-      stdevM = 0;
       stdevT = 0;
-      stdevE = 0;
       stdevW = 0;
 
       for (let j = 0; j < states.length; j++)
@@ -979,32 +1160,34 @@ function propagate(dontMove = false, forward = true)
 
       for (let K = 0; K < 4; K++)
       {
-        let tM = trM(states, DT, K);
         let tT = trT(states, DT, K);
-        let tE = trE(states, DT, K);
+        let tM = trM(states, DT, K); // Needed by trW
         let tW = trW(DT, K); // Uses rtsT and rtsM, created by trT and trM
-
-//console.log("trW[" + K + "]=" + tW);
-//console.log("trT[" + K + "]=" + tT);
-
-        traceM += tM;
+      
         traceT += tT;
-        traceE += tE;
         traceW += tW;
 
-        stdevM += tM*tM;
         stdevT += tT*tT;
-        stdevE += tE*tE;
         stdevW += tW*tW;
+
+        // We need to exclude outliers...
+        if (isFinite(tW) && (Wnum < 10 || Math.abs(tW) < 10*Math.sqrt(Wdev / Wnum - (Wsum/Wnum)**2)))
+        {
+          Wsum += tW;
+          Wdev += tW*tW;
+          Wnum++;
+        }
+        if (isFinite(tT) && (Tnum < 10 || Math.abs(tT) < 10*Math.sqrt(Tdev / Tnum - (Tsum/Tnum)**2)))
+        {
+          Tsum += tT;
+          Tdev += tT*tT;
+          Tnum++;
+        }
       }
-      traceM /= 4;
       traceT /= 4;
-      traceE /= 4;
       traceW /= 4;
 
-      stdevM = Math.sqrt(stdevM / 4 - traceM*traceM);
       stdevT = Math.sqrt(stdevT / 4 - traceT*traceT);
-      stdevE = Math.sqrt(stdevE / 4 - traceE*traceE);
       stdevW = Math.sqrt(stdevW / 4 - traceW*traceW);
 
       time += DT / 86400.0;
@@ -1013,28 +1196,31 @@ function propagate(dontMove = false, forward = true)
 
   let theVolume = volume(transformCoordinates(states, refstate)).toFixed(2);
   if (theVolume[0] != '-') theVolume = "&nbsp;" + theVolume;
-  traceM = traceM.toPrecision(5);
   traceT = traceT.toPrecision(5);
-  traceE = traceE.toPrecision(5);
   traceW = traceW.toPrecision(5);
-  stdevM = "&plusmn;" + stdevM.toPrecision(5);
   stdevT = "&plusmn;" + stdevT.toPrecision(5);
-  stdevE = "&plusmn;" + stdevE.toPrecision(5);
   stdevW = "&plusmn;" + stdevW.toPrecision(5);
 
-  if (traceM[0] != '-') traceM = "&nbsp;" + traceM;
+  trTavg = (Tsum/Tnum).toPrecision(5);
+  trWavg = (Wsum/Wnum).toPrecision(5);
+  trTdev = "&plusmn;" + Math.sqrt(Tdev / Tnum - (Tsum/Tnum)**2).toPrecision(5);
+  trWdev = "&plusmn;" + Math.sqrt(Wdev / Wnum - (Wsum/Wnum)**2).toPrecision(5);
+
   if (traceT[0] != '-') traceT = "&nbsp;" + traceT;
-  if (traceE[0] != '-') traceE = "&nbsp;" + traceE;
   if (traceW[0] != '-') traceW = "&nbsp;" + traceW;
 
+  if (trTavg[0] != '-') trTavg = "&nbsp;" + trTavg;
+  if (trWavg[0] != '-') trWavg = "&nbsp;" + trWavg;
+
   document.getElementById("volume").innerHTML = theVolume;
-  document.getElementById("trM").innerHTML = traceM;
   document.getElementById("trT").innerHTML = traceT + "<br/>" + stdevT;
-  document.getElementById("trE").innerHTML = traceE;
   document.getElementById("trW").innerHTML = traceW + "<br/>" + stdevW;
+
+  document.getElementById("trTavg").innerHTML = trTavg + "<br/>" + trTdev;
+  document.getElementById("trWavg").innerHTML = trWavg + "<br/>" + trWdev;
+
   document.getElementById("time").innerText = time.toFixed(2);
 
-    //window.requestAnimationFrame(render);
   render();
 
   inPROP = false;
@@ -1152,34 +1338,24 @@ function render()
       if (dx > 0) return;
       tempX = (spacecraft.y / (camera.x - spacecraft.x)) * canvSize;
       tempY = (spacecraft.z / (camera.x - spacecraft.x)) * canvSize;
-      //tempZ = (spacecraft.x / (camera.x - spacecraft.x)) * canvSize;
     }
     if (view == 2)
     {
       if (dy > 0) return;
       tempX = (spacecraft.z / (camera.y - spacecraft.y)) * canvSize;
       tempY = (spacecraft.x / (camera.y - spacecraft.y)) * canvSize;
-      //tempZ = (spacecraft.y / (camera.y - spacecraft.y)) * canvSize;
     }
     if (view == 3)
     {
       if (dz > 0) return;
       tempX = (spacecraft.x / (camera.z - spacecraft.z)) * canvSize;
       tempY = (spacecraft.y / (camera.z - spacecraft.z)) * canvSize;
-      //tempZ = (spacecraft.z / (camera.z - spacecraft.z)) * canvSize;
     }
 
-    //screenX = tempX * Math.cos(camera.phi);
-    //screenY = tempY * Math.cos(camera.theta) - Math.sqrt(tempX**2 + tempY**2) * Math.sin(camera.theta);
-
-    //screenX = canvas.width / 2 + screenX;
-    //screenY = canvas.height / 2 - screenY;
     screenX = canvas.width / 2 + tempX;
     screenY = canvas.height / 2 - tempY;
 
-
     // Draw sphere
-    // drawShinySphere(ctx, screenX, screenY, size, spacecraft.r, spacecraft.g, spacecraft.b);
     views.push({X:screenX, Y:screenY, S:size, R:spacecraft.r, G:spacecraft.g, B:spacecraft.b});
   });
 
@@ -1285,7 +1461,6 @@ function onInit(init)
   states = spacecrafts.map(spacecraft => new State(spacecraft.x, spacecraft.y, spacecraft.z,
                                                    spacecraft.vx, spacecraft.vy, spacecraft.vz,
                                                    spacecraft.r, spacecraft.g, spacecraft.b));
-//  refstate = spacecraftsets[init].refstate;
 
   // Create an array of indices
   indices = spacecrafts.map((_, index) => index);
@@ -1299,8 +1474,10 @@ window.addEventListener('DOMContentLoaded', () =>
 {
   const params = new URLSearchParams(window.location.search);
   if (params.get('view')) view = params.get('view');
-  if (params.get('init')) init = params.get('init');
-  if (params.get('corr')) corr = params.get('corr');
+  if (params.get('init')) init = 1*params.get('init');
+  if (params.get('corr')) corr = 1*params.get('corr');
+  if (params.get('sgna')) sgna = 1*params.get('sgna');
+  if (params.get('lina')) lina = 1*params.get('lina');
   if (params.get('w')) MOD.w = params.get('w');
   if (params.get('m')) MOD.m = params.get('m');
   if (params.get('y')) MOD.y = params.get('y');
@@ -1467,12 +1644,6 @@ function doResize()
   canvas.addEventListener("mouseup", doStop);
   canvas.addEventListener("touchend", (e) =>
   {
-    //const touchcancel = new TouchEvent('touchcancel',
-    //{
-    //  bubbles: true,
-    //  cancelable: true
-    //});
-    //e.target.dispatchEvent(touchcancel);
     doStop();
     doClick();
   });
@@ -1567,7 +1738,6 @@ let topView =
     }
 
     // Draw border around view area
-    //this.context.beginPath();
     this.context.strokeStyle = 'lightgray';
     this.context.strokeRect(this.x, this.y, this.width, this.height);
 
