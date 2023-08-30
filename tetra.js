@@ -1,3 +1,25 @@
+// tetra.js : Tetrahedral constellation simulation
+//
+// Copyright (c) 2023 Viktor T. Toth
+// 
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+// This version dated 2023/08/29.
+
+var strLog = "";
+var doCSV = 0;
+
 const GM = 1.32712440018e2; // Mm^3/kg/s^2
 const AU = 1.495978707e5;   // Mm
 
@@ -13,6 +35,12 @@ var lina = 0;  // Account for linear acceleration
 var MOD = { w: 0, m: 0, y: 0 };
 
 var time = 0;
+
+var traceT = 0;   // Inertial system
+var traceW = 0;   // Derotated satellite-fixed system
+
+var stdevT = 0;
+var stdevW = 0;
 
 var Tsum = 0;
 var Tdev = 0;
@@ -35,9 +63,9 @@ const nullstate = {x: 0, y: 0, z: 0};
 const spacecraftsets = [
   {
     name: "Circular",
-    tail: 300,
+    tail: 600,
     scale: AU,
-    step: 3600,
+    step: 600,
     refstate: { x: AU, y: 0, z: 0, vx: 0, vy: 30e-3, vz: 0},
     states: [
       { x: -1, y: -1, z: -3, vx:1e-8, vy:30e-3, vz:2e-7, r:255, g:128, b:128 },
@@ -50,7 +78,7 @@ const spacecraftsets = [
     name: "Eccentric",
     tail: 600,
     scale: AU,
-    step: 3600,
+    step: 600,
     refstate: { x: AU, y: 0, z: 0, vx: 0, vy: 35e-3, vz: 0},
     states: [
       { x: -1, y: -1, z: -1, vx:0e-7, vy:35e-3-15e-8, vz:1e-7, r:255, g:128, b:128 },
@@ -100,9 +128,9 @@ const spacecraftsets = [
   },
   {
     name: "Medium eccentric",
-    tail: 1200,
+    tail: 600,
     scale: 2*AU,
-    step: 86400,
+    step: 3600,
     refstate: { x: 1*AU, y: 0, z: 0, vx: 0, vy: 35e-3, vz: 0},
     states: [
       { x: -1, y: -1, z: -3, vx:1e-10, vy:35e-3, vz:1e-9, r:255, g:128, b:128 },
@@ -161,6 +189,19 @@ const spacecraftsets = [
       { x: 0, y: 0, z: 2, vx:0, vy:30e-3, vz:0, r:255, g:255, b:0 }
     ]
   },
+  {
+    name: "High ecc. [alt]",
+    tail: 600,
+    scale: AU,
+    step: 600,
+    refstate: { x: 0.6 * AU, y: 0, z: 0, vx: 0, vy: 0.0485, vz: 0 },
+    states: [
+      { x: -0.5, y: -0.5, z: -0.5, vx: 1e-7, vy:0.0485+1.6e-7, vz: 5e-7, r:255, g:128, b:128 },
+      { x: +0.5, y: -0.5, z:  0.5, vx: 1e-7, vy:0.0485-1.6e-7, vz:-8e-7, r:128, g:255, b:128 },
+      { x: -0.5, y:  0.5, z:  0.5, vx: 1e-7, vy:0.0485+1.6e-7, vz:-4e-7, r:128, g:128, b:255 },
+      { x: +0.5, y:  0.5, z: -0.5, vx:-1e-7, vy:0.0485-1.6e-7, vz: 3e-7, r:255, g:255, b:0 }
+    ]
+  },
 ];
 
 class State
@@ -211,6 +252,10 @@ function saveAll()
     step: step,
     time: time,
     MOD: MOD,
+    traceT: traceT,
+    traceW: traceW,
+    stdevT: stdevT,
+    stdevW: stdevW,
     Tsum: Tsum,
     Tdev: Tdev,
     Tnum: Tnum,
@@ -260,6 +305,10 @@ function loadAll()
       step = data.step;
       time = data.time;
       MOD = data.MOD;
+      traceT = data.traceT;
+      traceW = data.traceW;
+      stdevT = data.stdevT;
+      stdevW = data.stdevW;
       Tsum = data.Tsum;
       Tdev = data.Tdev;
       Tnum = data.Tnum;
@@ -1129,12 +1178,6 @@ function propagate(dontMove = false, forward = true)
   if (NT > 96) NT = 96;
   if (NT < 1) NT = 1;
 
-  var traceT = 0;   // Inertial system
-  var traceW = 0;   // Derotated satellite-fixed system
-
-  var stdevT = 0;
-  var stdevW = 0;
-
   if (!dontMove)
   {
     for (let i = 0; i < NT; i++)
@@ -1171,13 +1214,16 @@ function propagate(dontMove = false, forward = true)
         stdevW += tW*tW;
 
         // We need to exclude outliers...
-        if (isFinite(tW) && (Wnum < 10 || Math.abs(tW) < 10*Math.sqrt(Wdev / Wnum - (Wsum/Wnum)**2)))
+
+        const Z = 5;
+
+        if (isFinite(tW) && (Wnum < 10 || Math.abs(tW) - Math.abs(Wsum/Wnum) < Z * Math.sqrt(Wdev / Wnum - (Wsum/Wnum)**2)))
         {
           Wsum += tW;
           Wdev += tW*tW;
           Wnum++;
         }
-        if (isFinite(tT) && (Tnum < 10 || Math.abs(tT) < 10*Math.sqrt(Tdev / Tnum - (Tsum/Tnum)**2)))
+        if (isFinite(tW) && (Wnum < 10 || Math.abs(tT) - Math.abs(Tsum/Tnum) < Z * Math.sqrt(Tdev / Tnum - (Tsum/Tnum)**2)))
         {
           Tsum += tT;
           Tdev += tT*tT;
@@ -1195,26 +1241,33 @@ function propagate(dontMove = false, forward = true)
   }
 
   let theVolume = volume(transformCoordinates(states, refstate)).toFixed(2);
+
+  if (doCSV)
+  {
+    strLog += "" + time + ", " + theVolume + ", " + traceT + ", " +
+               stdevT + ", " + traceW + ", " + stdevW + "\n";
+  }
+
   if (theVolume[0] != '-') theVolume = "&nbsp;" + theVolume;
-  traceT = traceT.toPrecision(5);
-  traceW = traceW.toPrecision(5);
-  stdevT = "&plusmn;" + stdevT.toPrecision(5);
-  stdevW = "&plusmn;" + stdevW.toPrecision(5);
+  let strTraceT = traceT.toPrecision(5);
+  let strTraceW = traceW.toPrecision(5);
+  let strStdevT = "&plusmn;" + stdevT.toPrecision(5);
+  let strStdevW = "&plusmn;" + stdevW.toPrecision(5);
 
   trTavg = (Tsum/Tnum).toPrecision(5);
   trWavg = (Wsum/Wnum).toPrecision(5);
   trTdev = "&plusmn;" + Math.sqrt(Tdev / Tnum - (Tsum/Tnum)**2).toPrecision(5);
   trWdev = "&plusmn;" + Math.sqrt(Wdev / Wnum - (Wsum/Wnum)**2).toPrecision(5);
 
-  if (traceT[0] != '-') traceT = "&nbsp;" + traceT;
-  if (traceW[0] != '-') traceW = "&nbsp;" + traceW;
+  if (strTraceT[0] != '-') strTraceT = "&nbsp;" + strTraceT;
+  if (strTraceW[0] != '-') strTraceW = "&nbsp;" + strTraceW;
 
   if (trTavg[0] != '-') trTavg = "&nbsp;" + trTavg;
   if (trWavg[0] != '-') trWavg = "&nbsp;" + trWavg;
 
   document.getElementById("volume").innerHTML = theVolume;
-  document.getElementById("trT").innerHTML = traceT + "<br/>" + stdevT;
-  document.getElementById("trW").innerHTML = traceW + "<br/>" + stdevW;
+  document.getElementById("trT").innerHTML = strTraceT + "<br/>" + strStdevT;
+  document.getElementById("trW").innerHTML = strTraceW + "<br/>" + strStdevW;
 
   document.getElementById("trTavg").innerHTML = trTavg + "<br/>" + trTdev;
   document.getElementById("trWavg").innerHTML = trWavg + "<br/>" + trWdev;
@@ -1478,9 +1531,9 @@ window.addEventListener('DOMContentLoaded', () =>
   if (params.get('corr')) corr = 1*params.get('corr');
   if (params.get('sgna')) sgna = 1*params.get('sgna');
   if (params.get('lina')) lina = 1*params.get('lina');
-  if (params.get('w')) MOD.w = params.get('w');
-  if (params.get('m')) MOD.m = params.get('m');
-  if (params.get('y')) MOD.y = params.get('y');
+  if (params.get('m')) MOD.m = params.get('m'); // Yukawa mass (inverse range)
+  if (params.get('y')) MOD.y = params.get('y'); // Yukawa coupling constant
+  if (params.get('doCSV')) doCSV = params.get('doCSV');
 
   const select = document.getElementById("init");
   for (let i = 0; i < spacecraftsets.length; i++)
