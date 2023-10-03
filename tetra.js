@@ -1242,10 +1242,40 @@ function propagate(dontMove = false, forward = true)
 
   let theVolume = volume(transformCoordinates(states, refstate)).toFixed(2);
 
-  if (doCSV)
+  if (doCSV && rtsT[0].data.length > 1)
   {
+    let ACOS = function(r1, r2)
+    {
+      return 180/Math.PI * Math.acos(dot(r1, r2) / (norm(r1) * norm(r2)));
+    }
+
+    let rMin = 1e99;
+    let rMax = 0;
+    let aMin = 180.0;
+    let aMax = 0;
+    for (let K = 0; K < 4; K++)
+    {
+      for (let prop of ['r12', 'r13', 'r14'])
+      {
+        let r = norm(rtsT[K].data[1][prop]);
+        if (r < rMin) rMin = r;
+        if (r > rMax) rMax = r;
+      }
+      for (let prop of [['r12','r13'],['r13','r14'],['r14','r12']])
+      {
+        //let a = 180/Math.PI*Math.acos((dot(rtsT[K].data[1][prop[0]],rtsT[K].data[1][prop[1]]))/(norm(rtsT[K].data[1][prop[0]])*norm(rtsT[K].data[1][prop[1]])));
+        let a = ACOS(rtsT[K].data[1][prop[0]], rtsT[K].data[1][prop[1]]);
+        if (a < aMin) aMin = a;
+        if (a > aMax) aMax = a;
+      }
+    }
+
     strLog += "" + time + ", " + theVolume + ", " + traceT + ", " +
-               stdevT + ", " + traceW + ", " + stdevW + "\n";
+               stdevT + ", " + traceW + ", " + stdevW + ", " +
+               rMin + ", " + rMax + ", " + aMin + ", " + aMax + ", " +
+               norm(rtsT[0].data[1].r12) + ", " + norm(rtsT[0].data[1].r13) + ", " + norm(rtsT[0].data[1].r14) + ", " +
+               norm(rtsT[1].data[1].r12) + ", " + norm(rtsT[1].data[1].r13) + ", " + norm(rtsT[2].data[1].r12) +
+               rtsT.reduce((a,b,i) => a + ", " + ACOS(b.data[1].r12,b.data[1].r13) + ", " + ACOS(b.data[1].r13,b.data[1].r14) + ", " + ACOS(b.data[1].r14,b.data[1].r12),"") + ", " + (rtsT[0].data[1].r/AU) + "\n";
   }
 
   if (theVolume[0] != '-') theVolume = "&nbsp;" + theVolume;
