@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
-// This version dated 2023/08/29.
+// This version dated 2023/11/20.
 
 var strLog = "";
 var doCSV = 0;
@@ -26,7 +26,7 @@ const AU = 1.495978707e5;   // Mm
 var view = 3;  // Initial view (z-axis)
 var init = 0;  // Initial set (circular)
 var corr = 1;  // Tr to do 2nd order corrections?
-var sgna = 2;  // 0 = no Sagnac, 1 = velocities only, 2 = accelerations
+var sgna = 1;  // 0 = no Sagnac, 1 = velocities only, 2 = accelerations
 var lina = 0;  // Account for linear acceleration
 
 // Force modifiers:
@@ -1339,7 +1339,7 @@ function setView(v)
   if (v == 3) { camera.x = 0; camera.y = 0; camera.z = d; }
   camera.phi = camera.theta = 0;
   view = v;
-  if (timer == 0) render();
+  if (!working) render();
 }
 
 function render()
@@ -1478,51 +1478,75 @@ function zoom()
   if (view == 1) camera.x = d;
   if (view == 2) camera.y = d;
   if (view == 3) camera.z = d;
-  if (timer == 0) render();
+  if (!working) render();
 }
 
-var timer = 0;
+var worker = null;
+var working = false;
+
+function doWork(e)
+{
+  if (e.data.cmd === 'run')
+  {
+    if (!self.hasOwnProperty('timer') || timer == 0)
+      self.timer = setInterval(function ()
+      {
+        self.postMessage(0);
+      }, 50);
+  }
+  if (e.data.cmd === 'stop')
+  {
+    if (self.hasOwnProperty('timer')) clearInterval(timer);
+    self.timer = 0;
+  }
+}
 
 function start()
 {
   document.getElementById('skipForward').disabled = true;
   document.getElementById('skipBack').disabled = true;
-  if (timer == 0) timer = setInterval(propagate, 50);
+  working = true;
+  if (worker == null)
+  {
+    worker = new Worker(window.URL.createObjectURL(new Blob(["onmessage=" + doWork.toString()], {type: "text/javascript"})));
+    worker.onmessage = function(e)
+    {
+      propagate();
+    }
+  }
+  worker.postMessage({cmd: 'run'});
 }
 
 function stop()
 {
   document.getElementById('skipForward').disabled = false;
   document.getElementById('skipBack').disabled = false;
-  if (timer != 0)
-  {
-    clearInterval(timer);
-    timer = 0;
-  }
+  worker.postMessage({cmd: 'stop'});
+  working = false;
 }
 
 function play()
 {
   document.getElementById("init").disabled = true;
-  if (timer == 0) start();
+  if (!working) start();
   else stop();
 }
 
 function skipForward()
 {
   document.getElementById("init").disabled = true;
-  if (timer == 0) propagate(false, true);
+  if (!working) propagate(false, true);
 }
 
 function skipBack()
 {
   document.getElementById("init").disabled = true;
-  if (timer == 0) propagate(false, false);
+  if (!working) propagate(false, false);
 }
 
 function onProp()
 {
-  if (timer == 0) propagate(true);
+  if (!working) propagate(true);
 }
 
 var canvas;
@@ -1708,7 +1732,7 @@ function doResize()
       if (camera.phi > 0.5*Math.PI) camera.phi = 0.5*Math.PI;
       if (camera.theta < -0.5*Math.PI) camera.theta = -0.5*Math.PI;
       if (camera.theta > 0.5*Math.PI) camera.theta = 0.5*Math.PI;
-      if (!timer) render();
+      if (!working) render();
     }
   }
 
@@ -1773,7 +1797,7 @@ let topView =
     let avgState = {x: avgX / AU, y: -avgY / AU, z: avgZ / AU};
 
     // Add latest state to buffer
-    if (timer != 0)
+    if (working)
     {
       this.buffer.push(avgState);
       if (this.buffer.length > this.bufferSize)
