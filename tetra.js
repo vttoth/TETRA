@@ -143,7 +143,7 @@ const spacecraftsets = [
     name: "Big eccentric",
     tail: 3000,
     scale: 10*AU,
-    step: 86400,
+    step: 21600,
     refstate: { x: 10*AU, y: 0, z: 0, vx: 0, vy: 8e-3, vz: 0},
     states: [
       { x: -1, y: -1, z: -3, vx:1e-9, vy:8e-3, vz:1e-8, r:255, g:128, b:128 },
@@ -181,12 +181,14 @@ const spacecraftsets = [
   {
     name: "test",
     tail: 300,
+    scale: AU,
+    step: 6,
     refstate: { x: AU, y: 0, z: 0, vx: 0, vy: 30e-3, vz: 0},
     states: [
       { x: 0, y: 0, z: 0, vx:0, vy:30e-3, vz:0, r:255, g:128, b:128 },
-      { x: +2, y: 0, z: 0, vx:0, vy:30e-3, vz:4e-7, r:128, g:255, b:128 },
-      { x: 0, y: 2, z: 0, vx:0, vy:30e-3, vz:0, r:128, g:128, b:255 },
-      { x: 0, y: 0, z: 2, vx:0, vy:30e-3, vz:0, r:255, g:255, b:0 }
+      { x: 0, y: 1, z: 0, vx:0, vy:30e-3, vz:0, r:128, g:255, b:128 },
+      { x: 0, y: 0, z: 1, vx:0, vy:30e-3, vz:0, r:128, g:128, b:255 },
+      { x: 1, y: 0, z: 0, vx:0, vy:30e-3, vz:0, r:255, g:255, b:0 }
     ]
   },
   {
@@ -369,8 +371,96 @@ function rk4(s, dt, refstate)
   const k2 = a(s.add(k1.multiply(dt / 2)), refstate).add(new State(s.vx + 0.5 * dt * k1.vx, s.vy + 0.5 * dt * k1.vy, s.vz + 0.5 * dt * k1.vz, 0, 0, 0));
   const k3 = a(s.add(k2.multiply(dt / 2)), refstate).add(new State(s.vx + 0.5 * dt * k2.vx, s.vy + 0.5 * dt * k2.vy, s.vz + 0.5 * dt * k2.vz, 0, 0, 0));
   const k4 = a(s.add(k3.multiply(dt)), refstate).add(new State(s.vx + dt * k3.vx, s.vy + dt * k3.vy, s.vz + dt * k3.vz, 0, 0, 0));
+
   return s.add(k1.add(k2.multiply(2)).add(k3.multiply(2)).add(k4).multiply(dt / 6));
 }
+
+function stormerRichardson(s, dt, refstate) {
+  function a(s, refstate) {
+    var r = Math.sqrt((s.x + refstate.x) ** 2 + (s.y + refstate.y) ** 2 + (s.z + refstate.z) ** 2);
+    var r3 = r * r * r;
+    var GMY = GM * (1 + MOD.y * (1 - (1 + r * MOD.m / AU) * Math.exp(-r * MOD.m / AU)));
+    return new State(0, 0, 0, -GMY * (s.x + refstate.x) / r3, -GMY * (s.y + refstate.y) / r3, -GMY * (s.z + refstate.z) / r3);
+  }
+
+  function leapfrogStep(s, dt, refstate) {
+    // Half-step velocity update
+    var a0 = a(s, refstate);
+    var vx_half = s.vx + 0.5 * dt * a0.vx;
+    var vy_half = s.vy + 0.5 * dt * a0.vy;
+    var vz_half = s.vz + 0.5 * dt * a0.vz;
+
+    // Full-step position update
+    var x_new = s.x + dt * vx_half;
+    var y_new = s.y + dt * vy_half;
+    var z_new = s.z + dt * vz_half;
+
+    // Full-step acceleration update
+    var s_new = new State(x_new, y_new, z_new, vx_half, vy_half, vz_half, s.r, s.g, s.b);
+    var a_new = a(s_new, refstate);
+
+    // Half-step velocity update
+    var vx_new = vx_half + 0.5 * dt * a_new.vx;
+    var vy_new = vy_half + 0.5 * dt * a_new.vy;
+    var vz_new = vz_half + 0.5 * dt * a_new.vz;
+
+    return new State(x_new, y_new, z_new, vx_new, vy_new, vz_new, s.r, s.g, s.b);
+  }
+
+  // Perform two leapfrog steps with half the time step
+  var s_half1 = leapfrogStep(s, dt / 2, refstate);
+  var s_half2 = leapfrogStep(s_half1, dt / 2, refstate);
+
+  // Perform one leapfrog step with the full time step
+  var s_full = leapfrogStep(s, dt, refstate);
+
+  // Richardson extrapolation
+  var x_new = (4 * s_half2.x - s_full.x) / 3;
+  var y_new = (4 * s_half2.y - s_full.y) / 3;
+  var z_new = (4 * s_half2.z - s_full.z) / 3;
+  var vx_new = (4 * s_half2.vx - s_full.vx) / 3;
+  var vy_new = (4 * s_half2.vy - s_full.vy) / 3;
+  var vz_new = (4 * s_half2.vz - s_full.vz) / 3;
+
+  return new State(x_new, y_new, z_new, vx_new, vy_new, vz_new, s.r, s.g, s.b);
+}
+
+function yoshida6(s, dt, refstate)
+{
+  function a(s, refstate)
+  {
+    var r = Math.sqrt((s.x + refstate.x) ** 2 + (s.y + refstate.y) ** 2 + (s.z + refstate.z) ** 2);
+    var r3 = r * r * r;
+    var GMY = GM * (1 + MOD.y * (1 - (1 + r*MOD.m/AU)*Math.exp(-r*MOD.m/AU)));
+    return new State(0, 0, 0, -GMY * (s.x + refstate.x) / r3, -GMY * (s.y + refstate.y) / r3, -GMY * (s.z + refstate.z) / r3);
+  }
+
+  const crTwo = 2.0 ** (1.0/3.0);
+  const w0 = crTwo / (crTwo - 2);
+  const w1 = 1.0 / (2 - crTwo);
+  const c1 = w1 * 0.5;
+  const c2 = (w0 + w1) * 0.5;
+  const c3 = c2;
+  const c4 = c1;
+  const d1 = w1;
+  const d2 = w0;
+  const d3 = w1;
+
+  let s1 = s.add(new State(s.vx * c1 * dt, s.vy * c1 * dt, s.vz * c1 * dt, 0, 0, 0));
+  s1 = s1.add(a(s1, refstate).multiply(d1 * dt));
+
+  s1 = s1.add(new State(s1.vx * c2 * dt, s1.vy * c2 * dt, s1.vz * c2 * dt, 0, 0, 0));
+  s1 = s1.add(a(s1, refstate).multiply(d2 * dt));
+
+  s1 = s1.add(new State(s1.vx * c3 * dt, s1.vy * c3 * dt, s1.vz * c3 * dt, 0, 0, 0));
+  s1 = s1.add(a(s1, refstate).multiply(d3 * dt));
+
+  s1 = s1.add(new State(s1.vx * c4 * dt, s1.vy * c4 * dt, s1.vz * c4 * dt, 0, 0, 0));
+
+  return s1;
+}
+
+const integrator = stormerRichardson;
 
 var sunZ;
 
@@ -556,9 +646,9 @@ var rtsW = [];
 
 for (let K = 0; K < 4; K++)
 {
-  rtsM.push(new TS(3));
-  rtsT.push(new TS(3));
-  rtsW.push(new TS(3));
+  rtsM.push(new TS(5));
+  rtsT.push(new TS(5));
+  rtsW.push(new TS(5));
 }
 
 function trT(states, DT, K=0)
@@ -620,7 +710,7 @@ function trM(states, DT, K=0)
   // from its mirror image. In our case, we check if the handedness
   // of the tetrahedron matches that of the reference frame, by
   // projecting vertex D onto the ez axis:
-  if (dot(ez,vadd(states[(K+3)%4],smul(-1,states[0]))) * r14.z < 0) r14.z = -r14.z;
+  if (dot(ez,vadd(states[(K+3)%4],smul(-1,states[K]))) * r14.z < 0) r14.z = -r14.z;
 
   rtsM[K].push({r12:r12, r13:r13, r14:r14, r:r, n:n, ex:ex, ey:ey, ez:ez});
 
@@ -815,7 +905,6 @@ function RangeDiff(rki, vki, aki, a)
   } while (Math.abs(t2ki - t2ki2) > 1e-17 && count-- > 0);
   t2ki = t2ki2;
 
-//console.log("t1ki=" + t1ki + ", t1ik=" + t1ik + ", t2ik=" + t2ik + ", t2ki=" + t2ki);
   let dt = t1ki - t2ik;
   dt += t1ik - t2ki;
   return dt / c;
@@ -829,31 +918,27 @@ function trW(DT, K=0)
   // copute that observable. We do so for the middle of a triplet of
   // position observables, as this will be the midpoint used later
   // on for numerically calculating acceleration.
-  if (rtsT[K].data.length != 3) return NaN;
+  if (rtsT[K].data.length != 5) return NaN;
 
   // Midpoint positions
-  let r12 = rtsT[K].data[1].r12;
-  let r13 = rtsT[K].data[1].r13;
-  let r14 = rtsT[K].data[1].r14;
+  let r12 = rtsT[K].data[2].r12;
+  let r13 = rtsT[K].data[2].r13;
+  let r14 = rtsT[K].data[2].r14;
 
   // Velocities of satellites 234 wrt. satellite 1
-  let v12 = smul(1/(2*DT), vadd(rtsT[K].data[2].r12, smul(-1, rtsT[K].data[0].r12)));
-  let v13 = smul(1/(2*DT), vadd(rtsT[K].data[2].r13, smul(-1, rtsT[K].data[0].r13)));
-  let v14 = smul(1/(2*DT), vadd(rtsT[K].data[2].r14, smul(-1, rtsT[K].data[0].r14)));
+  let v12 = smul(1/(12*DT), vadd(vadd(rtsT[K].data[0].r12, smul(-8, rtsT[K].data[1].r12)), vadd(smul(8, rtsT[K].data[3].r12), smul(-1, rtsT[K].data[4].r12))));
+  let v13 = smul(1/(12*DT), vadd(vadd(rtsT[K].data[0].r13, smul(-8, rtsT[K].data[1].r13)), vadd(smul(8, rtsT[K].data[3].r13), smul(-1, rtsT[K].data[4].r13))));
+  let v14 = smul(1/(12*DT), vadd(vadd(rtsT[K].data[0].r14, smul(-8, rtsT[K].data[1].r14)), vadd(smul(8, rtsT[K].data[3].r14), smul(-1, rtsT[K].data[4].r14))));
 
   // Accelerations of the same
   let a1 = {x:0, y:0, z:0};
   if (lina)
   {
-    a1 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r1, rtsT[K].data[2].r1),
-                                   smul(-2, rtsT[K].data[1].r1)));
+    a1 = smul(1/(12*DT*DT), vadd(vadd(smul(-1, rtsT[K].data[0].r1), smul(16, rtsT[K].data[1].r1)), vadd(smul(-30, rtsT[K].data[2].r1), vadd(smul(16, rtsT[K].data[3].r1), smul(-1, rtsT[K].data[4].r1)))));
   }
-  let a12 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r12, rtsT[K].data[2].r12),
-                                 smul(-2, rtsT[K].data[1].r12)));
-  let a13 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r13, rtsT[K].data[2].r13),
-                                 smul(-2, rtsT[K].data[1].r13)));
-  let a14 = smul(1/(DT*DT), vadd(vadd(rtsT[K].data[0].r14, rtsT[K].data[2].r14),
-                                 smul(-2, rtsT[K].data[1].r14)));
+  let a12 = smul(1/(12*DT*DT), vadd(vadd(smul(-1, rtsT[K].data[0].r12), smul(16, rtsT[K].data[1].r12)), vadd(smul(-30, rtsT[K].data[2].r12), vadd(smul(16, rtsT[K].data[3].r12), smul(-1, rtsT[K].data[4].r12)))));
+  let a13 = smul(1/(12*DT*DT), vadd(vadd(smul(-1, rtsT[K].data[0].r13), smul(16, rtsT[K].data[1].r13)), vadd(smul(-30, rtsT[K].data[2].r13), vadd(smul(16, rtsT[K].data[3].r13), smul(-1, rtsT[K].data[4].r13)))));
+  let a14 = smul(1/(12*DT*DT), vadd(vadd(smul(-1, rtsT[K].data[0].r14), smul(16, rtsT[K].data[1].r14)), vadd(smul(-30, rtsT[K].data[2].r14), vadd(smul(16, rtsT[K].data[3].r14), smul(-1, rtsT[K].data[4].r14)))));
 
   // The actual Sagnac-type time differences
   let w123 = SagnacDiff(r12, r13, v12, v13, a12, a13, a1);
@@ -867,9 +952,6 @@ function trW(DT, K=0)
     t121 = RangeDiff(r12, v12, a12, a1);
     t131 = RangeDiff(r13, v13, a13, a1);
     t141 = RangeDiff(r14, v14, a14, a1);
-//console.log("t121 = " + t121);
-//console.log("t131 = " + t131);
-//console.log("t141 = " + t141);
   }
 
   //
@@ -878,20 +960,17 @@ function trW(DT, K=0)
   // in the satellite-fixed noninertial reference frame.
   //
 
-  r12 = rtsM[K].data[1].r12;
-  r13 = rtsM[K].data[1].r13;
-  r14 = rtsM[K].data[1].r14;
+  r12 = rtsM[K].data[2].r12;
+  r13 = rtsM[K].data[2].r13;
+  r14 = rtsM[K].data[2].r14;
 
   // Velocities of satellites 234 wrt. satellite 1
-  v12 = smul(1/(2*DT), vadd(rtsM[K].data[2].r12, smul(-1, rtsM[K].data[0].r12)));
-  v13 = smul(1/(2*DT), vadd(rtsM[K].data[2].r13, smul(-1, rtsM[K].data[0].r13)));
-  v14 = smul(1/(2*DT), vadd(rtsM[K].data[2].r14, smul(-1, rtsM[K].data[0].r14)));
-  a12 = smul(1/(DT*DT), vadd(vadd(rtsM[K].data[0].r12, rtsM[K].data[2].r12),
-                             smul(-2, rtsM[K].data[1].r12)));
-  a13 = smul(1/(DT*DT), vadd(vadd(rtsM[K].data[0].r13, rtsM[K].data[2].r13),
-                             smul(-2, rtsM[K].data[1].r13)));
-  a14 = smul(1/(DT*DT), vadd(vadd(rtsM[K].data[0].r14, rtsM[K].data[2].r14),
-                             smul(-2, rtsM[K].data[1].r14)));
+  v12 = smul(1/(12*DT), vadd(vadd(rtsM[K].data[0].r12, smul(-8, rtsM[K].data[1].r12)), vadd(smul(8, rtsM[K].data[3].r12), smul(-1, rtsM[K].data[4].r12))));
+  v13 = smul(1/(12*DT), vadd(vadd(rtsM[K].data[0].r13, smul(-8, rtsM[K].data[1].r13)), vadd(smul(8, rtsM[K].data[3].r13), smul(-1, rtsM[K].data[4].r13))));
+  v14 = smul(1/(12*DT), vadd(vadd(rtsM[K].data[0].r14, smul(-8, rtsM[K].data[1].r14)), vadd(smul(8, rtsM[K].data[3].r14), smul(-1, rtsM[K].data[4].r14))));
+  a12 = smul(1/(12*DT*DT), vadd(vadd(smul(-1, rtsM[K].data[0].r12), smul(16, rtsM[K].data[1].r12)), vadd(smul(-30, rtsM[K].data[2].r12), vadd(smul(16, rtsM[K].data[3].r12), smul(-1, rtsM[K].data[4].r12)))));
+  a13 = smul(1/(12*DT*DT), vadd(vadd(smul(-1, rtsM[K].data[0].r13), smul(16, rtsM[K].data[1].r13)), vadd(smul(-30, rtsM[K].data[2].r13), vadd(smul(16, rtsM[K].data[3].r13), smul(-1, rtsM[K].data[4].r13)))));
+  a14 = smul(1/(12*DT*DT), vadd(vadd(smul(-1, rtsM[K].data[0].r14), smul(16, rtsM[K].data[1].r14)), vadd(smul(-30, rtsM[K].data[2].r14), vadd(smul(16, rtsM[K].data[3].r14), smul(-1, rtsM[K].data[4].r14)))));
 
   // We now solve for the angular velocity vector w.
   let w = {x:0, y:0, z:0};
@@ -1010,27 +1089,37 @@ function trW(DT, K=0)
 
   let R = MP(I, MP(sM(Math.sin(theta), Q), sM(1-Math.cos(theta), MM(Q,Q))));
 
-  // We now adjust the first and third position vectors to remove the
+  // We now adjust the first two and last two position vectors to remove the
   // pseudoforce due to frame rotation.
-  r12 = Mmul(R, rtsM[K].data[0].r12);
-  r13 = Mmul(R, rtsM[K].data[0].r13);
-  r14 = Mmul(R, rtsM[K].data[0].r14);
 
-  //let n = Mmul(R, rtsM[K].data[0].n);
-  //let n = rtsM[K].data[0].n;
+  r12 = Mmul(R, Mmul(R, rtsM[K].data[0].r12));
+  r13 = Mmul(R, Mmul(R, rtsM[K].data[0].r13));
+  r14 = Mmul(R, Mmul(R, rtsM[K].data[0].r14));
 
-  rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[1].r, n:rtsM[K].data[1].n});
+  rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[2].r, n:rtsM[K].data[2].n});
+
+  r12 = Mmul(R, rtsM[K].data[1].r12);
+  r13 = Mmul(R, rtsM[K].data[1].r13);
+  r14 = Mmul(R, rtsM[K].data[1].r14);
+
+  rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[2].r, n:rtsM[K].data[2].n});
 
   // The middle position is left alone
-  rtsW[K].push(rtsM[K].data[1]);
+  rtsW[K].push(rtsM[K].data[2]);
 
   theta = -theta;
   R = MP(I, MP(sM(Math.sin(theta), Q), sM(1-Math.cos(theta), MM(Q,Q))));
-  r12 = Mmul(R, rtsM[K].data[2].r12);
-  r13 = Mmul(R, rtsM[K].data[2].r13);
-  r14 = Mmul(R, rtsM[K].data[2].r14);
+  r12 = Mmul(R, rtsM[K].data[3].r12);
+  r13 = Mmul(R, rtsM[K].data[3].r13);
+  r14 = Mmul(R, rtsM[K].data[3].r14);
 
-  rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[1].r, n:rtsM[K].data[1].n});
+  rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[2].r, n:rtsM[K].data[2].n});
+
+  r12 = Mmul(R, Mmul(R, rtsM[K].data[4].r12));
+  r13 = Mmul(R, Mmul(R, rtsM[K].data[4].r13));
+  r14 = Mmul(R, Mmul(R, rtsM[K].data[4].r14));
+
+  rtsW[K].push({r12:r12, r13:r13, r14:r14, r:rtsM[K].data[2].r, n:rtsM[K].data[2].n});
 
   //return doTR(rtsW[K], DT, w);
   return doTR(rtsW[K], DT, lina ? a1 : null);
@@ -1038,8 +1127,9 @@ function trW(DT, K=0)
 
 function doTR(rts, DT, a1 = null)
 {
-  if (rts.data.length == 3)
+  if (rts.data.length == 5)
   {
+/*
     let a12={x:(rts.data[0].r12.x+rts.data[2].r12.x-2*rts.data[1].r12.x)/DT**2,
              y:(rts.data[0].r12.y+rts.data[2].r12.y-2*rts.data[1].r12.y)/DT**2,
              z:(rts.data[0].r12.z+rts.data[2].r12.z-2*rts.data[1].r12.z)/DT**2};
@@ -1049,16 +1139,48 @@ function doTR(rts, DT, a1 = null)
     let a14={x:(rts.data[0].r14.x+rts.data[2].r14.x-2*rts.data[1].r14.x)/DT**2,
              y:(rts.data[0].r14.y+rts.data[2].r14.y-2*rts.data[1].r14.y)/DT**2,
              z:(rts.data[0].r14.z+rts.data[2].r14.z-2*rts.data[1].r14.z)/DT**2};
+*/
+let a12 = {
+  x: (-rts.data[0].r12.x + 16*rts.data[1].r12.x - 30*rts.data[2].r12.x + 16*rts.data[3].r12.x - rts.data[4].r12.x) / (12*DT*DT),
+  y: (-rts.data[0].r12.y + 16*rts.data[1].r12.y - 30*rts.data[2].r12.y + 16*rts.data[3].r12.y - rts.data[4].r12.y) / (12*DT*DT),
+  z: (-rts.data[0].r12.z + 16*rts.data[1].r12.z - 30*rts.data[2].r12.z + 16*rts.data[3].r12.z - rts.data[4].r12.z) / (12*DT*DT)
+};
 
-    let r12=rts.data[1].r12;
-    let r13=rts.data[1].r13;
-    let r14=rts.data[1].r14;
+let a13 = {
+  x: (-rts.data[0].r13.x + 16*rts.data[1].r13.x - 30*rts.data[2].r13.x + 16*rts.data[3].r13.x - rts.data[4].r13.x) / (12*DT*DT),
+  y: (-rts.data[0].r13.y + 16*rts.data[1].r13.y - 30*rts.data[2].r13.y + 16*rts.data[3].r13.y - rts.data[4].r13.y) / (12*DT*DT),
+  z: (-rts.data[0].r13.z + 16*rts.data[1].r13.z - 30*rts.data[2].r13.z + 16*rts.data[3].r13.z - rts.data[4].r13.z) / (12*DT*DT)
+};
 
+let a14 = {
+  x: (-rts.data[0].r14.x + 16*rts.data[1].r14.x - 30*rts.data[2].r14.x + 16*rts.data[3].r14.x - rts.data[4].r14.x) / (12*DT*DT),
+  y: (-rts.data[0].r14.y + 16*rts.data[1].r14.y - 30*rts.data[2].r14.y + 16*rts.data[3].r14.y - rts.data[4].r14.y) / (12*DT*DT),
+  z: (-rts.data[0].r14.z + 16*rts.data[1].r14.z - 30*rts.data[2].r14.z + 16*rts.data[3].r14.z - rts.data[4].r14.z) / (12*DT*DT)
+};
 
-    if (corr == 1 && ("n" in rts.data[1]))
+    let r12=rts.data[2].r12;
+    let r13=rts.data[2].r13;
+    let r14=rts.data[2].r14;
+
+/* --- experiment: use actual accelerations, not computed from finite diffs
+    if ("r1" in rts.data[1])
     {
-      let n = rts.data[1].n;
-      let r = rts.data[1].r;
+      let r1 = rts.data[1].r1;
+      let a1 = smul(+GM/norm(r1)**3, r1);
+      let r2 = vadd(r1, r12);
+      let r3 = vadd(r1, r13);
+      let r4 = vadd(r1, r14);
+
+      a12 = vadd(smul(-GM/norm(r2)**3, r2), a1);
+      a13 = vadd(smul(-GM/norm(r3)**3, r3), a1);
+      a14 = vadd(smul(-GM/norm(r4)**3, r4), a1);
+    }
+*/
+
+    if (corr == 1 && ("n" in rts.data[2]))
+    {
+      let n = rts.data[2].n;
+      let r = rts.data[2].r;
 
       let da12 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r12)**2 - 2.5 * dot(n, r12)**2, n), X(r12, X(r12, n))));
       let da13 = smul(-3*GM/r**4, vadd(smul(1.5*norm(r13)**2 - 2.5 * dot(n, r13)**2, n), X(r13, X(r13, n))));
@@ -1190,9 +1312,9 @@ function propagate(dontMove = false, forward = true)
 
       for (let j = 0; j < states.length; j++)
       {
-        states[j] = rk4(states[j], DT, refstate);
+        states[j] = integrator(states[j], DT, refstate);
       }
-      var newstate = rk4(refstate, DT, nullstate);
+      var newstate = integrator(refstate, DT, nullstate);
       for (let j = 0; j < states.length; j++)
       {
         states[j].x += refstate.x - newstate.x;
@@ -1242,7 +1364,7 @@ function propagate(dontMove = false, forward = true)
 
   let theVolume = volume(transformCoordinates(states, refstate)).toFixed(2);
 
-  if (doCSV && rtsT[0].data.length > 1)
+  if (doCSV && rtsT[0].data.length > 2)
   {
     let ACOS = function(r1, r2)
     {
@@ -1257,14 +1379,13 @@ function propagate(dontMove = false, forward = true)
     {
       for (let prop of ['r12', 'r13', 'r14'])
       {
-        let r = norm(rtsT[K].data[1][prop]);
+        let r = norm(rtsT[K].data[2][prop]);
         if (r < rMin) rMin = r;
         if (r > rMax) rMax = r;
       }
       for (let prop of [['r12','r13'],['r13','r14'],['r14','r12']])
       {
-        //let a = 180/Math.PI*Math.acos((dot(rtsT[K].data[1][prop[0]],rtsT[K].data[1][prop[1]]))/(norm(rtsT[K].data[1][prop[0]])*norm(rtsT[K].data[1][prop[1]])));
-        let a = ACOS(rtsT[K].data[1][prop[0]], rtsT[K].data[1][prop[1]]);
+        let a = ACOS(rtsT[K].data[2][prop[0]], rtsT[K].data[2][prop[1]]);
         if (a < aMin) aMin = a;
         if (a > aMax) aMax = a;
       }
@@ -1273,9 +1394,9 @@ function propagate(dontMove = false, forward = true)
     strLog += "" + time + ", " + theVolume + ", " + traceT + ", " +
                stdevT + ", " + traceW + ", " + stdevW + ", " +
                rMin + ", " + rMax + ", " + aMin + ", " + aMax + ", " +
-               norm(rtsT[0].data[1].r12) + ", " + norm(rtsT[0].data[1].r13) + ", " + norm(rtsT[0].data[1].r14) + ", " +
-               norm(rtsT[1].data[1].r12) + ", " + norm(rtsT[1].data[1].r13) + ", " + norm(rtsT[2].data[1].r12) +
-               rtsT.reduce((a,b,i) => a + ", " + ACOS(b.data[1].r12,b.data[1].r13) + ", " + ACOS(b.data[1].r13,b.data[1].r14) + ", " + ACOS(b.data[1].r14,b.data[1].r12),"") + ", " + (rtsT[0].data[1].r/AU) + "\n";
+               norm(rtsT[0].data[2].r12) + ", " + norm(rtsT[0].data[2].r13) + ", " + norm(rtsT[0].data[2].r14) + ", " +
+               norm(rtsT[1].data[2].r12) + ", " + norm(rtsT[1].data[2].r13) + ", " + norm(rtsT[2].data[2].r12) +
+               rtsT.reduce((a,b,i) => a + ", " + ACOS(b.data[2].r12,b.data[2].r13) + ", " + ACOS(b.data[2].r13,b.data[2].r14) + ", " + ACOS(b.data[2].r14,b.data[2].r12),"") + ", " + (rtsT[0].data[2].r/AU) + "\n";
   }
 
   if (theVolume[0] != '-') theVolume = "&nbsp;" + theVolume;
@@ -1486,13 +1607,22 @@ var working = false;
 
 function doWork(e)
 {
+  self.processing = false;
   if (e.data.cmd === 'run')
   {
     if (!self.hasOwnProperty('timer') || timer == 0)
       self.timer = setInterval(function ()
       {
-        self.postMessage(0);
-      }, 50);
+        if (!self.processing)
+        {
+          self.processing = true;
+          self.postMessage(0);
+        }
+      }, 20);
+  }
+  if (e.data.cmd == 'done')
+  {
+    self.processing = false;
   }
   if (e.data.cmd === 'stop')
   {
@@ -1511,7 +1641,8 @@ function start()
     worker = new Worker(window.URL.createObjectURL(new Blob(["onmessage=" + doWork.toString()], {type: "text/javascript"})));
     worker.onmessage = function(e)
     {
-      propagate();
+      if (working) propagate();
+      worker.postMessage({cmd: 'done'});
     }
   }
   worker.postMessage({cmd: 'run'});
