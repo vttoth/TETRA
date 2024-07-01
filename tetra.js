@@ -1,6 +1,6 @@
 // tetra.js : Tetrahedral constellation simulation
 //
-// Copyright (c) 2023 Viktor T. Toth
+// Copyright (c) 2024 Viktor T. Toth
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
-// This version dated 2023/11/20.
+// This version dated 2024/06/30.
 
 var strLog = "";
 var doCSV = 0;
@@ -32,7 +32,9 @@ var lina = 0;  // Account for linear acceleration
 // Force modifiers:
 // m - Yukawa mass (inverse range) in 1/AU
 // y - Yukawa coupling constant
-var MOD = { w: 0, m: 0, y: 0 };
+// r0 - Cubic galileon length scale
+// a0 - MOND acceleration scale
+var MOD = { w: 0, m: 0, y: 0, r0: 0, a0: 0 };
 
 var time = 0;
 
@@ -363,7 +365,9 @@ function rk4(s, dt, refstate)
   {
     var r = Math.sqrt((s.x + refstate.x) ** 2 + (s.y + refstate.y) ** 2 + (s.z + refstate.z) ** 2);
     var r3 = r * r * r;
-    var GMY = GM * (1 + MOD.y * (1 - (1 + r*MOD.m/AU)*Math.exp(-r*MOD.m/AU)));
+    var GMY = GM * (1 + MOD.y * (1 - (1 + r * MOD.m) * Math.exp(-r * MOD.m)));
+    if (MOD.r0) GMY *= 1 + (r / MOD.r0) ** 1.5;
+    if (MOD.a0) GMY *= Math.sqrt(0.5 + Math.sqrt(0.25 + (MOD.a0 * r * r / GM)**2));
     return new State(0, 0, 0, -GMY * (s.x + refstate.x) / r3, -GMY * (s.y + refstate.y) / r3, -GMY * (s.z + refstate.z) / r3);
   }
 
@@ -379,7 +383,9 @@ function stormerRichardson(s, dt, refstate) {
   function a(s, refstate) {
     var r = Math.sqrt((s.x + refstate.x) ** 2 + (s.y + refstate.y) ** 2 + (s.z + refstate.z) ** 2);
     var r3 = r * r * r;
-    var GMY = GM * (1 + MOD.y * (1 - (1 + r * MOD.m / AU) * Math.exp(-r * MOD.m / AU)));
+    var GMY = GM * (1 + MOD.y * (1 - (1 + r * MOD.m) * Math.exp(-r * MOD.m)));
+    if (MOD.r0) GMY *= 1 + (r / MOD.r0) ** 1.5;
+    if (MOD.a0) GMY *= Math.sqrt(0.5 + Math.sqrt(0.25 + (MOD.a0 * r * r / GM)**2));
     return new State(0, 0, 0, -GMY * (s.x + refstate.x) / r3, -GMY * (s.y + refstate.y) / r3, -GMY * (s.z + refstate.z) / r3);
   }
 
@@ -431,7 +437,9 @@ function yoshida6(s, dt, refstate)
   {
     var r = Math.sqrt((s.x + refstate.x) ** 2 + (s.y + refstate.y) ** 2 + (s.z + refstate.z) ** 2);
     var r3 = r * r * r;
-    var GMY = GM * (1 + MOD.y * (1 - (1 + r*MOD.m/AU)*Math.exp(-r*MOD.m/AU)));
+    var GMY = GM * (1 + MOD.y * (1 - (1 + r * MOD.m) * Math.exp(-r * MOD.m)));
+    if (MOD.r0) GMY *= 1 + (r / MOD.r0) ** 1.5;
+    if (MOD.a0) GMY *= Math.sqrt(0.5 + Math.sqrt(0.25 + (MOD.a0 * r * r / GM)**2));
     return new State(0, 0, 0, -GMY * (s.x + refstate.x) / r3, -GMY * (s.y + refstate.y) / r3, -GMY * (s.z + refstate.z) / r3);
   }
 
@@ -1716,8 +1724,10 @@ window.addEventListener('DOMContentLoaded', () =>
   if (params.get('corr')) corr = 1*params.get('corr');
   if (params.get('sgna')) sgna = 1*params.get('sgna');
   if (params.get('lina')) lina = 1*params.get('lina');
-  if (params.get('m')) MOD.m = params.get('m'); // Yukawa mass (inverse range)
-  if (params.get('y')) MOD.y = params.get('y'); // Yukawa coupling constant
+  if (params.get('m')) MOD.m = 1*params.get('m'); // Yukawa mass (inverse range)
+  if (params.get('y')) MOD.y = 1*params.get('y'); // Yukawa coupling constant
+  if (params.get('r0')) MOD.r0 = 1*params.get('r0'); // Cubic galileon range scale
+  if (params.get('a0')) MOD.a0 = 1*params.get('a0'); // MOND acceleration scale
   if (params.get('doCSV')) doCSV = params.get('doCSV');
 
   const select = document.getElementById("init");

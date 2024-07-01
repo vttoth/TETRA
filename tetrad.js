@@ -1,6 +1,6 @@
 // tetra.js : Tetrahedral constellation simulation
 //
-// Copyright (c) 2023 Viktor T. Toth
+// Copyright (c) 2024 Viktor T. Toth
 // 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
-// This version dated 2023/11/20.
+// This version dated 2026/06/30.
 
 /* -- helper functions if needed for debugging
 
@@ -41,21 +41,27 @@ var doCSV = 0;
 // Force modifiers:
 // m - Yukawa mass (inverse range) in 1/AU
 // y - Yukawa coupling constant
+// r0 - Cubic galileon length scale
+// a0 - MOND acceleration scale
 var MOD;
 
 {
   const params = new URLSearchParams(window.location.search);
   let m = 0;
   let y = 0;
+  let r0 = 0;
+  let a0 = 0;
   if (params.get('view')) view = params.get('view');
   if (params.get('init')) init = 1*params.get('init');
   if (params.get('corr')) corr = 1*params.get('corr');
-  if (params.get('m')) m = params.get('m'); // Yukawa mass (inverse range)
-  if (params.get('y')) y = params.get('y'); // Yukawa coupling constant
+  if (params.get('m')) m = 1*params.get('m'); // Yukawa mass (inverse range)
+  if (params.get('y')) y = 1*params.get('y'); // Yukawa coupling constant
+  if (params.get('r0')) r0 = 1*params.get('r0'); // Cubic galileon range scale
+  if (params.get('a0')) a0 = 1*params.get('a0'); // MOND acceleration scale
   if (params.get('doCSV')) doCSV = params.get('doCSV');
   if (params.get('digits')) nDigits = parseInt(params.get('digits'));
 
-  MOD = { w: new Decimal(0), m: new Decimal(m), y: new Decimal(y) };
+  MOD = { w: new Decimal(0), m: new Decimal(m), y: new Decimal(y), r0: new Decimal(r0), a0: new Decimal(a0) };
 }
 
 Decimal.set({ precision: nDigits });
@@ -438,7 +444,12 @@ function stormerRichardson(s, dt, refstate)
   {
     var r = Decimal.sqrt((s.x.plus(refstate.x)).pow(2).plus((s.y.plus(refstate.y)).pow(2)).plus((s.z.plus(refstate.z)).pow(2)));
     var r3 = r.pow(3);
-    var GMY = GMD.times(new Decimal(1).plus(MOD.y.times(new Decimal(1).minus(new Decimal(1).plus(r.times(MOD.m).div(AU))).times(r.neg().times(MOD.m).div(AU).exp()))));
+    var GMY = GMD.times(new Decimal(1).plus(MOD.y.times(new Decimal(1).minus(new Decimal(1).plus(r.times(MOD.m))).times(r.neg().times(MOD.m).exp()))));
+    if (!MOD.r0.isZero()) GMY = GMY.times(new Decimal(1).plus(Decimal.pow(r.div(MOD.r0), new Decimal(1.5))));
+    if (!MOD.a0.isZero()) GMY = GMY.times(Decimal.sqrt(new Decimal(0.5).plus(Decimal.sqrt(new Decimal(0.25).plus(MOD.a0.times(r).times(r).div(GMD).pow(2))))));
+
+
+//    if (!MOD.a0.isZero()) GMY = GMY.times(Decimal.sqrt(new Decimal(1).div(new Decimal(1).plus(MOD.a0.times(MOD.a0).times(r3).times(r).div(GMY).div(GMY)))));
 
     return new State(new Decimal(0), new Decimal(0), new Decimal(0),
                      GMY.neg().times(s.x.plus(refstate.x)).div(r3),
