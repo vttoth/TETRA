@@ -27,13 +27,193 @@
   <title>Tetrahedral constellation simulation</title>
   <link rel="stylesheet" href="tetra.css" type="text/css" />
   <script src='tetra.js' type="text/javascript"></script>
+  <script>
+
+document.addEventListener('DOMContentLoaded', function()
+{
+  const modal = document.getElementById('editMOD');
+  const MODEditBtn = document.getElementById('MODEditBtn');
+  const span = document.getElementsByClassName('close')[0];
+
+  // When the user clicks on <span> (x), close the modal
+  span.onclick = function()
+  {
+    closeModal();
+  }
+
+  // When the user clicks anywhere outside of the modal, close it
+  window.onclick = function(event)
+  {
+    const modal = document.getElementById('editMOD');
+    if (event.target == modal)
+    {
+      closeModal();
+    }
+  }
+
+  // Function to show the modal
+  function showModal()
+  {
+    if (MOD.a0 != 0)
+    {
+      document.getElementById('r0').disabled = true;
+      document.getElementById('mu').disabled = true;
+      document.getElementById('a').disabled = true;
+      document.getElementById('a0').disabled = false;
+      document.getElementById('mond').checked=true;
+      MOD.y = MOD.m = MOD.r0 = 0;
+    }
+    else if (MOD.y != 0 && MOD.m != 0)
+    {
+      document.getElementById('r0').disabled = true;
+      document.getElementById('mu').disabled = false;
+      document.getElementById('a').disabled = false;
+      document.getElementById('a0').disabled = true;
+      document.getElementById('yukawa').checked=true;
+      MOD.r0 = 0;
+    }
+    else
+    {
+      document.getElementById('r0').disabled = false;
+      document.getElementById('mu').disabled = true;
+      document.getElementById('a').disabled = true;
+      document.getElementById('a0').disabled = true;
+      document.getElementById('cubic-galileon').checked=true;
+    }
+
+    document.getElementById('r0').value = MOD.r0;
+    document.getElementById('mu').value = MOD.m;
+    document.getElementById('a').value = MOD.y;
+    document.getElementById('a0').value = MOD.a0;
+
+    modal.style.display = 'block';
+  }
+
+  // Function to close the modal
+  function closeModal()
+  {
+    modal.style.display = 'none';
+    //labelInput.value = '';
+    //titleInput.value = '';
+  }
+
+  // Event listener for the modal form submission
+  MODForm.onsubmit = function(event)
+  {
+    event.preventDefault();
+    MOD.a0 = 1*document.getElementById('a0').value;
+    MOD.m = 1*document.getElementById('mu').value;
+    MOD.y = 1*document.getElementById('a').value;
+    MOD.r0 = 1*document.getElementById('r0').value;
+    closeModal();
+  }
+
+  // Event listener for the 'Add Row' button
+  MODEditBtn.addEventListener('click', showModal);
+
+  document.getElementById('cubic-galileon').addEventListener('click', function()
+  {
+    document.getElementById('r0').disabled = false;
+    document.getElementById('mu').disabled = true;
+    document.getElementById('a').disabled = true;
+    document.getElementById('a0').disabled = true;
+    document.getElementById('mu').value = 0;
+    document.getElementById('a').value = 0;
+    document.getElementById('a0').value = 0;
+  });
+
+  document.getElementById('yukawa').addEventListener('click', function()
+  {
+    document.getElementById('r0').disabled = true;
+    document.getElementById('mu').disabled = false;
+    document.getElementById('a').disabled = false;
+    document.getElementById('a0').disabled = true;
+    document.getElementById('a0').value = 0;
+    document.getElementById('r0').value = 0;
+  });
+
+  document.getElementById('mond').addEventListener('click', function()
+  {
+    document.getElementById('r0').disabled = true;
+    document.getElementById('mu').disabled = true;
+    document.getElementById('a').disabled = true;
+    document.getElementById('a0').disabled = false;
+    document.getElementById('mu').value = 0;
+    document.getElementById('a').value = 0;
+    document.getElementById('r0').value = 0;
+  });
+
+});
+
+
+  </script>
 </head>
 <body>
+
+
+<!-- Modal -->
+<div id="editMOD" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <p class='modal-header'>Model parameters</p>
+    <form id="MODForm">
+
+
+
+<div id="model-selection">
+  <div>
+    <input type="radio" id="cubic-galileon" name="model" value="cubic-galileon" checked>
+    <label class="modal-section" for="cubic-galileon">Cubic galileon model</label>
+    <div>
+      <label for="r0">Characteristic scale (<i>r</i><sub>0</sub>, 10<sup>6</sup>&nbsp;m):</label>
+      <input type="number" step="any" id="r0" name="r0">
+    </div>
+  </div>
+  <hr>
+
+  <div>
+    <input type="radio" id="yukawa" name="model" value="yukawa">
+    <label class="modal-section" for="yukawa">Yukawa modification</label>
+    <div>
+      <label for="mu">Yukawa mass (&mu;, (10<sup>6</sup>&nbsp;m)<sup>&minus;1</sup>):</label>
+      <input type="number" step="any" id="mu" name="mu" disabled>
+    </div>
+    <div>
+      <label for="a">Yukawa coefficient (&alpha;):</label>
+      <input type="number" step="any" id="a" name="a" disabled>
+    </div>
+  </div>
+  <hr>
+
+  <div>
+    <input type="radio" id="mond" name="model" value="mond">
+    <label class="modal-section" for="mond">Modified Newtonian Dynamics</label>
+    <div>
+      <label for="a0">MOND acceleration (<i>a</i><sub>0</sub>, 10<sup>6</sup>&nbsp;m/s<sup>2</sup>):</label>
+      <input type="number" step="any" id="a0" name="a0" disabled>
+    </div>
+  </div>
+</div>
+
+<!--
+      <input type="text" id="labelInput" placeholder="Enter label" required>
+      <input type="text" id="titleInput" placeholder="Enter title" required>
+-->
+
+    <div class='okrow'>
+      <button type="submit">OK</button>
+    </div>
+    </form>
+  </div>
+</div>
+
+
+
   <h1>Tetrahedral constellation simulation</h1>
   <div class='loadsave'>
   <button id="load" onClick="loadAll()">Load</button>
   <button id="save" onClick="saveAll()">Save</button>
-  <br/><span class='version'>Version 0.9.6</span>
+  <br/><span class='version'>Version 0.9.7</span>
   </div>
   <div id="main-container">
     <div id="visualization">
@@ -73,6 +253,10 @@
           </td>
         </tr>
       </table>
+      <div class='btnRow'>
+      <button id='MODEditBtn'>Modified gravity settings</button>
+      <button id='exportCSV' onClick='saveCSV()'>Export CSV</button>
+      </div>
       <h3>Orbit characteristics</h3>
       <table class='orb'>
         <tr><th>Volume:&nbsp;</th><td><span class='val' id="volume"></span><span class='val'>&nbsp;&times;&nbsp;10<sup>9</sup></span>&nbsp;km<sup>3</sup></td></tr>

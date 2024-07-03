@@ -124,3 +124,104 @@ h3
   font-size: 8px;
   color: #333;
 }
+
+.btnRow
+{
+  white-space: nowrap;
+}
+
+/* Modal styles */
+.modal
+{
+  display: none;
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.modal-content
+{
+  background-color: #fefefe;
+  margin: 15% auto;
+  padding: 5px;
+  border: 1px solid #888;
+  width: 80%;
+  max-width: 440px;
+  white-space: nowrap;
+}
+
+.modal-content button
+{
+  margin-top: 10px;
+  padding: 5px;
+  min-width: 80px;
+}
+
+.modal-header
+{
+  background-color: #5AF;
+  margin-top: -5px;
+  margin-left: -5px;
+  margin-right: -5px;
+  padding-bottom: 10px;
+  padding-top: 10px;
+  padding-left: 10px;
+  color: white;
+}
+
+.modal label
+{
+  min-width: 270px;
+  display: inline-block;
+  margin-left: 35px;
+}
+
+.modal input[type=radio]
+{
+  margin-top: 1em;
+}
+
+.modal input[type=number]
+{
+  width: 100px;
+  text-align: right;
+}
+
+.modal-section
+{
+  font-weight: bold;
+  text-decoration: underline;
+  margin-left: revert !important;
+}
+
+.okrow
+{
+  text-align: right;
+  margin-right: 20px;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.close
+{
+  // color: #aaa;
+  color: white;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.close:hover,
+.close:focus
+{
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+

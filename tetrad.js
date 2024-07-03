@@ -36,7 +36,7 @@ var nDigits = 22;
 var view = 3;  // Initial view (z-axis)
 var init = 0;  // Initial set (circular)
 var corr = 1;  // Tr to do 2nd order corrections?
-var doCSV = 0;
+var doCSV = 1;
 
 // Force modifiers:
 // m - Yukawa mass (inverse range) in 1/AU
@@ -279,6 +279,17 @@ const spacecraftsets = [
     ]
   },
 ];
+
+function saveCSV()
+{
+  if (strLog == "") return;
+  let blob = new Blob([strLog], {type: "text.csv"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement("a");
+  a.href = url;
+  a.download=document.title + ".csv";
+  a.click();
+}
 
 function saveAll()
 {

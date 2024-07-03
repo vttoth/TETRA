@@ -18,7 +18,7 @@
 // This version dated 2024/06/30.
 
 var strLog = "";
-var doCSV = 0;
+var doCSV = 1;
 
 const GM = 1.32712440018e2; // Mm^3/kg/s^2
 const AU = 1.495978707e5;   // Mm
@@ -239,6 +239,17 @@ class State
   {
     return new State(this.x*dt, this.y*dt, this.z*dt, this.vx*dt, this.vy*dt, this.vz*dt, this.r, this.g, this.b);
   }
+}
+
+function saveCSV()
+{
+  if (strLog == "") return;
+  let blob = new Blob([strLog], {type: "text.csv"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement("a");
+  a.href = url;
+  a.download=document.title + ".csv";
+  a.click();
 }
 
 function saveAll()
